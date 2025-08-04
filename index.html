@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Enhanced Weather App</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="search-container">
+    <input type="text" id="cityInput" class="search-input" placeholder="Search for a city..." autocomplete="off" />
+    <div class="search-actions">
+      <div class="search-icon" onclick="getWeather()">🔍</div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Start Screen -->
+    <div id="startScreen" class="start-screen">
+      <div class="start-icon">🔍</div>
+      <div class="start-text">Start searching for weather</div>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loading" class="loading" style="display: none;">Loading weather data</div>
+    
+    <!-- Error State -->
+    <div id="error" class="error-message" style="display: none;"></div>
+    
+    <!-- Weather Content -->
+    <div id="weatherContent" class="weather-content">
+      <div class="location-header">
+        <span class="location-icon">📍</span>
+        <span id="cityName">London</span>
+      </div>
+      <div class="date-display" id="currentDate">Monday, July 21, 2025</div>
+
+      <div class="unit-toggle">
+        <button id="unitToggleBtn">Show °F</button>
+      </div>
+
+      <div class="main-weather">
+        <div id="weatherIcon" class="weather-icon-main">☀️</div>
+        <div class="temp-main">
+          <div id="temperature" class="temperature">22°</div>
+          <div id="description" class="description">Sunny</div>
+        </div>
+      </div>
+
+      <!-- Weather Details -->
+      <div class="weather-details">
+        <div class="detail-item">
+          <div class="detail-icon">💧</div>
+          <div id="humidity" class="detail-value">65%</div>
+          <div class="detail-label">Humidity</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-icon">💨</div>
+          <div id="windSpeed" class="detail-value">15 km/h</div>
+          <div class="detail-label">Wind Speed</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-icon">👁️</div>
+          <div id="visibility" class="detail-value">10 km</div>
+          <div class="detail-label">Visibility</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-icon">🌡️</div>
+          <div id="feelsLike" class="detail-value">25°</div>
+          <div class="detail-label">Feels Like</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-icon">🌅</div>
+          <div id="uvIndex" class="detail-value">5</div>
+          <div class="detail-label">UV Index</div>
+        </div>
+        <div class="detail-item">
+          <div class="detail-icon">🌊</div>
+          <div id="pressure" class="detail-value">1013 hPa</div>
+          <div class="detail-label">Pressure</div>
+        </div>
+      </div>
+
+      <!-- Air Quality Section -->
+      <div class="air-quality-section">
+        <div class="section-title">Air Quality</div>
+        <div class="air-quality-card">
+          <div class="aqi-main">
+            <div id="aqiValue" class="aqi-value">42</div>
+            <div id="aqiLevel" class="aqi-level">Good</div>
+          </div>
+          <div class="aqi-details">
+            <div class="aqi-item">
+              <span>PM2.5:</span>
+              <span id="pm25">12 μg/m³</span>
+            </div>
+            <div class="aqi-item">
+              <span>PM10:</span>
+              <span id="pm10">18 μg/m³</span>
+            </div>
+            <div class="aqi-item">
+              <span>O3:</span>
+              <span id="ozone">65 μg/m³</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="forecast-section">
+        <div class="forecast-title">24-Hour Forecast</div>
+        <div class="forecast-grid" id="forecastGrid">
+          <!-- Forecast cards will be populated here -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Chat Guide -->
+  <div class="bottom-guide" id="bottomGuide">
+    <div class="guide-content">
+      <div class="guide-avatar">💬</div>
+      <div class="guide-message" id="guideMessage">Search for a city to get started! 🌍</div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
