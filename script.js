@@ -1,6 +1,5 @@
 const apiKey = '2aa939fed7a78e3a3239ec5a87e31a05';
 
-// Weather condition to emoji mapping
 const weatherEmojis = {
   '01d': '☀️', '01n': '🌙',
   '02d': '⛅', '02n': '☁️',
@@ -13,320 +12,242 @@ const weatherEmojis = {
   '50d': '🌫️', '50n': '🌫️'
 };
 
-// Global variables
-let isCelsius = true;
-let currentWeatherData = null;
-let currentForecastData = null;
-let currentAirQuality = null;
-let chatHistory = [];
-let isChatOpen = false;
+let suggestionTimeout;
+let currentSuggestionIndex = -1;
 
-// AI Response Templates and Context Data
-const aiKnowledgeBase = {
-  // Weather-based recommendations
-  clothingRecommendations: {
-    sunny: ['Light clothing', 'Sunglasses', 'Hat', 'Sunscreen', 'Breathable fabrics'],
-    rainy: ['Waterproof jacket', 'Umbrella', 'Waterproof shoes', 'Rain boots', 'Quick-dry clothing'],
-    snowy: ['Warm coat', 'Gloves', 'Scarf', 'Winter boots', 'Thermal layers'],
-    cloudy: ['Light jacket', 'Layers', 'Comfortable shoes', 'Light sweater'],
-    windy: ['Windbreaker', 'Secure hat', 'Closed shoes', 'Avoid loose clothing'],
-    hot: ['Light colors', 'Loose fitting clothes', 'Hat', 'Minimal layers', 'Cotton fabrics'],
-    cold: ['Warm layers', 'Insulated jacket', 'Warm hat', 'Thermal underwear', 'Warm socks']
-  },
-  
-  activities: {
-    sunny: ['Beach activities', 'Hiking', 'Outdoor sports', 'Picnics', 'Cycling', 'Walking', 'Photography'],
-    rainy: ['Museums', 'Indoor shopping', 'Cafes', 'Movies', 'Reading', 'Cooking', 'Board games'],
-    snowy: ['Skiing', 'Snowboarding', 'Ice skating', 'Hot chocolate', 'Winter photography', 'Sledding'],
-    cloudy: ['Walking', 'Sightseeing', 'Outdoor markets', 'Light hiking', 'Photography'],
-    windy: ['Kite flying', 'Sailing', 'Windsurfing', 'Indoor activities', 'Wind-protected areas']
-  },
-
-  healthTips: {
-    sunny: ['Stay hydrated', 'Use sunscreen SPF 30+', 'Seek shade during peak hours', 'Wear UV protection'],
-    rainy: ['Vitamin D supplement', 'Stay dry to avoid illness', 'Be cautious of wet surfaces'],
-    snowy: ['Protect against frostbite', 'Stay warm and dry', 'Be aware of hypothermia signs'],
-    windy: ['Protect eyes from debris', 'Secure loose items', 'Be cautious of wind chill'],
-    hot: ['Drink extra water', 'Avoid prolonged sun exposure', 'Watch for heat exhaustion signs'],
-    cold: ['Layer clothing', 'Keep extremities warm', 'Stay active to maintain circulation']
-  },
-
-  cityAttractions: {
-    default: ['Historic landmarks', 'Local restaurants', 'Parks and gardens', 'Museums', 'Shopping districts', 'Cultural sites']
+async function showSuggestions(query) {
+  const dropdown = document.getElementById('suggestionsDropdown');
+  if (!query || query.length < 2) {
+    hideSuggestions();
+    return;
   }
-};
 
-// Advanced AI Chat Responses
-const aiResponses = {
-  greetings: [
-    "Hello! I'm your AI Weather Assistant. How can I help you today? 🌤️",
-    "Hi there! Ready to explore weather insights and recommendations? ☀️",
-    "Welcome! I'm here to provide intelligent weather analysis and city guidance. 🤖"
-  ],
-  
-  weatherAnalysis: {
-    generateInsight: (weatherData) => {
-      const temp = weatherData.main.temp;
-      const condition = weatherData.weather[0].main.toLowerCase();
-      const humidity = weatherData.main.humidity;
-      const windSpeed = weatherData.wind.speed * 3.6;
-      
-      let insights = [];
-      
-      // Temperature analysis
-      if (temp > 30) {
-        insights.push("🌡️ It's quite hot today! Stay hydrated and seek shade during peak hours.");
-      } else if (temp < 5) {
-        insights.push("🥶 Bundle up! It's cold outside. Layer your clothing for warmth.");
-      } else if (temp > 20 && temp <= 30) {
-        insights.push("🌤️ Perfect temperature for outdoor activities!");
-      }
-      
-      // Condition analysis
-      if (condition.includes('rain')) {
-        insights.push("☔ Rain expected - perfect time for indoor activities or cozy moments with a hot drink!");
-      } else if (condition.includes('clear') || condition.includes('sun')) {
-        insights.push("☀️ Beautiful clear weather - ideal for outdoor adventures!");
-      } else if (condition.includes('cloud')) {
-        insights.push("☁️ Overcast skies create perfect lighting for photography and comfortable temperatures for walking.");
-      }
-      
-      // Humidity analysis
-      if (humidity > 80) {
-        insights.push("💧 High humidity levels - you might feel warmer than the actual temperature.");
-      } else if (humidity < 30) {
-        insights.push("🏜️ Low humidity - consider using moisturizer and staying hydrated.");
-      }
-      
-      // Wind analysis
-      if (windSpeed > 20) {
-        insights.push("💨 Windy conditions - secure loose items and be cautious outdoors.");
-      } else if (windSpeed > 10) {
-        insights.push("🍃 Nice breeze today - perfect for activities like kite flying!");
-      }
-      
-      return insights;
+  try {
+    const response = await fetch(`https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(query)}&limit=6&appid=${apiKey}`);
+    if (!response.ok) {
+      console.error('OpenWeather Geocoding API Error:', response.statusText);
+      hideSuggestions();
+      return;
     }
-  },
 
-  contextualResponses: {
-    getResponse: (userInput, context) => {
-      const input = userInput.toLowerCase();
+    const cities = await response.json();
+    if (!cities.length) {
+      hideSuggestions();
+      return;
+    }
+
+    dropdown.innerHTML = cities.map(city => {
+      const fullName = `${city.name}, ${city.country}`;
+      return `
+        <div class="suggestion-item" onclick="handleSuggestionClick('${fullName}')">
+          <span class="suggestion-icon">📍</span>
+          <span>${fullName}</span>
+        </div>
+      `;
+    }).join('');
+
+    dropdown.classList.add('show');
+    currentSuggestionIndex = -1;
+  } catch (error) {
+    console.error('Error fetching city suggestions:', error);
+    hideSuggestions();
+  }
+}
+
+function handleSuggestionClick(cityName) {
+  document.getElementById('cityInput').value = cityName;
+  hideSuggestions();
+  getWeather();
+}
+
+// AI Personality Class
+class NimbusAI {
+  constructor() {
+    this.name = "Nimbus";
+    this.personality = "friendly";
+    this.mood = "cheerful";
+    this.lastWeatherData = null;
+    this.conversationCount = 0;
+    this.isVisible = false;
+    
+    // Initialize with welcome message
+    setTimeout(() => {
+      this.speak(this.getWelcomeMessage());
+    }, 2000);
+  }
+
+  getWelcomeMessage() {
+    const welcomes = [
+      "Hi there! I'm Nimbus, your weather companion! ☁️ Click on me anytime for weather insights!",
+      "Hey! Nimbus here! 👋 I love talking about weather patterns and giving you local tips!",
+      "Welcome! I'm your AI weather buddy Nimbus! Let's explore the skies together! ✨"
+    ];
+    return this.randomChoice(welcomes);
+  }
+
+  generateWeatherCommentary(weatherData) {
+    const temp = Math.round(weatherData.main.temp);
+    const condition = weatherData.weather[0].main.toLowerCase();
+    const humidity = weatherData.main.humidity;
+    const windSpeed = Math.round(weatherData.wind.speed * 3.6);
+    const cityName = weatherData.name;
+
+    let commentary = [];
+
+    // Temperature comments
+    if (temp > 30) {
+      commentary.push("🔥 Whoa! It's scorching out there! Stay hydrated and find some shade!");
+    } else if (temp > 25) {
+      commentary.push("☀️ Perfect weather for outdoor activities! Maybe grab some sunglasses?");
+    } else if (temp > 15) {
+      commentary.push("🌤️ Nice and comfortable! Great day to be outside!");
+    } else if (temp > 5) {
+      commentary.push("🧥 A bit chilly! You might want to grab a light jacket.");
+    } else {
+      commentary.push("🥶 Brrr! Bundle up warm out there!");
+    }
+
+    // Weather condition comments
+    switch(condition) {
+      case 'clear':
+        commentary.push("Clear skies ahead! Perfect visibility for stargazing tonight! ✨");
+        break;
+      case 'clouds':
+        commentary.push("Those clouds are putting on quite a show! Great for photography! 📸");
+        break;
+      case 'rain':
+        commentary.push("Rain drops keep falling! Don't forget your umbrella! ☔");
+        break;
+      case 'thunderstorm':
+        commentary.push("Nature's light show is happening! Stay safe indoors! ⚡");
+        break;
+      case 'snow':
+        commentary.push("Winter wonderland mode activated! Time for hot cocoa! ❄️");
+        break;
+      case 'mist':
+      case 'fog':
+        commentary.push("Mysterious and misty! Drive carefully and embrace the mystique! 🌫️");
+        break;
+    }
+
+    // Humidity comments
+    if (humidity > 80) {
+      commentary.push("💧 It's quite humid! You might feel a bit sticky today.");
+    } else if (humidity < 30) {
+      commentary.push("🏜️ Pretty dry conditions! Stay moisturized!");
+    }
+
+    // Wind comments
+    if (windSpeed > 25) {
+      commentary.push("💨 Windy day ahead! Hold onto your hat!");
+    } else if (windSpeed < 5) {
+      commentary.push("🍃 Very calm winds today - perfect for outdoor dining!");
+    }
+
+    // Location-specific fun facts
+    commentary.push(this.getLocationFact(cityName));
+
+    return this.randomChoice(commentary);
+  }
+
+  getLocationFact(cityName) {
+    const facts = [
+      `Fun fact: ${cityName} has its own unique microclimate! 🌍`,
+      `${cityName} is looking lovely today! I bet the locals are enjoying this weather! 🏠`,
+      `Weather in ${cityName} can be quite unique - each city has its own personality! 🌆`,
+      `${cityName}'s weather is part of what makes it special! 💫`
+    ];
+    return this.randomChoice(facts);
+  }
+
+  getRandomTip() {
+    const tips = [
+      "💡 Pro tip: Check the UV index before heading out for extended sun exposure!",
+      "🌡️ Did you know? Humidity affects how hot it feels - that's called the 'heat index'!",
+      "⚡ Lightning fact: You're more likely to be struck by lightning than win the lottery!",
+      "🌈 Rainbow science: You need sun AND rain at the same time to see one!",
+      "❄️ No two snowflakes are exactly alike - each one is a unique crystal!",
+      "🌪️ Tornadoes spin counterclockwise in the Northern Hemisphere!",
+      "☁️ Clouds are made of tiny water droplets or ice crystals floating in the air!",
+      "🌊 The ocean influences weather patterns across the entire planet!"
+    ];
+    return this.randomChoice(tips);
+  }
+
+  getRandomQuip() {
+    const quips = [
+      "I'm having a partly cloudy day myself! ☁️😄",
+      "Weather is just the sky's way of showing off! ✨",
+      "I predict... you're going to have a great day! 🔮",
+      "Remember: there's no bad weather, only inappropriate clothing! 👕",
+      "Every storm runs out of rain eventually! 🌦️➡️☀️",
+      "I love my job - every day brings new atmospheric adventures! 🌤️",
+      "Weather watching is my favorite hobby! What's yours? 🤔",
+      "The atmosphere is literally always changing - just like us! 🌀"
+    ];
+    return this.randomChoice(quips);
+  }
+
+  speak(message) {
+    const aiMessage = document.getElementById('aiMessage');
+    const aiTyping = document.getElementById('aiTyping');
+    const aiAvatar = document.getElementById('aiAvatar');
+    const speechBubble = document.getElementById('aiSpeechBubble');
+
+    // Show typing animation
+    aiMessage.style.display = 'none';
+    aiTyping.style.display = 'flex';
+    speechBubble.classList.add('show');
+    aiAvatar.classList.add('talking');
+
+    // Simulate typing delay
+    setTimeout(() => {
+      aiTyping.style.display = 'none';
+      aiMessage.style.display = 'block';
+      aiMessage.textContent = message;
+      aiAvatar.classList.remove('talking');
       
-      // Weather questions
-      if (input.includes('weather') || input.includes('forecast')) {
-        if (currentWeatherData) {
-          const city = currentWeatherData.name;
-          const temp = Math.round(currentWeatherData.main.temp);
-          const condition = currentWeatherData.weather[0].description;
-          return `Current weather in ${city}: ${temp}°C with ${condition}. ${getWeatherAdvice(currentWeatherData.weather[0].main)}`;
-        }
-        return "Please search for a city first, and I'll provide detailed weather information!";
-      }
-      
-      // Clothing recommendations
-      if (input.includes('wear') || input.includes('clothing') || input.includes('dress')) {
-        if (currentWeatherData) {
-          return getClothingRecommendation(currentWeatherData);
-        }
-        return "Search for a city's weather first, and I'll recommend what to wear!";
-      }
-      
-      // Activity suggestions
-      if (input.includes('activity') || input.includes('activities') || input.includes('do')) {
-        if (currentWeatherData) {
-          return getActivityRecommendation(currentWeatherData);
-        }
-        return "Let me know your city first, and I'll suggest perfect activities for the weather!";
-      }
-      
-      // 7-day forecast
-      if (input.includes('7-day') || input.includes('week') || input.includes('forecast')) {
-        return "I currently show 24-hour forecasts. For extended forecasts, I recommend checking multiple days or using detailed weather services!";
-      }
-      
-      // Local attractions
-      if (input.includes('attraction') || input.includes('places') || input.includes('visit') || input.includes('local')) {
-        if (currentWeatherData) {
-          return getCityRecommendations(currentWeatherData.name);
-        }
-        return "Search for a city first, and I'll suggest local attractions and places to visit!";
-      }
-      
-      // Health tips
-      if (input.includes('health') || input.includes('tips') || input.includes('advice')) {
-        if (currentWeatherData) {
-          return getHealthTips(currentWeatherData);
-        }
-        return "Share your location first, and I'll provide weather-related health tips!";
-      }
-      
-      // Default responses
-      const defaultResponses = [
-        "I'm here to help with weather insights! Try asking about clothing recommendations, activities, or local attractions.",
-        "Ask me about what to wear, what activities to do, or places to visit in your city!",
-        "I can provide weather analysis, outfit suggestions, activity recommendations, and local insights. What interests you?"
+      // Auto-hide after reading time
+      setTimeout(() => {
+        speechBubble.classList.remove('show');
+      }, Math.max(3000, message.length * 50));
+    }, 1000 + Math.random() * 1000);
+
+    this.conversationCount++;
+  }
+
+  randomChoice(array) {
+    return array[Math.floor(Math.random() * array.length)];
+  }
+
+  onWeatherUpdate(weatherData) {
+    this.lastWeatherData = weatherData;
+    setTimeout(() => {
+      this.speak(this.generateWeatherCommentary(weatherData));
+    }, 2000);
+  }
+
+  handleUserInteraction() {
+    if (this.lastWeatherData) {
+      const interactions = [
+        this.generateWeatherCommentary(this.lastWeatherData),
+        this.getRandomTip(),
+        this.getRandomQuip()
       ];
-      
-      return defaultResponses[Math.floor(Math.random() * defaultResponses.length)];
+      this.speak(this.randomChoice(interactions));
+    } else {
+      const greetings = [
+        "Hi! Search for a city and I'll give you some weather insights! 🔍",
+        "Hey there! I'm ready to chat about weather whenever you are! ☁️",
+        "Hello! Try searching for your city and I'll share some cool weather facts! 🌟"
+      ];
+      this.speak(this.randomChoice(greetings));
     }
   }
-};
-
-// Utility functions for AI responses
-function getWeatherAdvice(condition) {
-  const adviceMap = {
-    'Clear': '☀️ Perfect day for outdoor activities!',
-    'Clouds': '☁️ Comfortable weather for any plans!',
-    'Rain': '☔ Great day for indoor activities or cozy moments!',
-    'Snow': '❄️ Winter wonderland - perfect for warm drinks!',
-    'Thunderstorm': '⛈️ Stay safe indoors during the storm!',
-    'Drizzle': '🌦️ Light rain - perfect with an umbrella!',
-    'Mist': '🌫️ Mysterious atmospheric conditions!',
-    'Fog': '🌫️ Low visibility - drive safely!'
-  };
-  return adviceMap[condition] || '🌤️ Have a wonderful day!';
 }
 
-function getClothingRecommendation(weatherData) {
-  const temp = weatherData.main.temp;
-  const condition = weatherData.weather[0].main.toLowerCase();
-  const city = weatherData.name;
-  
-  let recommendations = [];
-  
-  // Temperature-based recommendations
-  if (temp > 30) {
-    recommendations.push(...aiKnowledgeBase.clothingRecommendations.hot);
-  } else if (temp > 20) {
-    recommendations.push(...aiKnowledgeBase.clothingRecommendations.sunny);
-  } else if (temp > 10) {
-    recommendations.push(...aiKnowledgeBase.clothingRecommendations.cloudy);
-  } else {
-    recommendations.push(...aiKnowledgeBase.clothingRecommendations.cold);
-  }
-  
-  // Condition-based additions
-  if (condition.includes('rain')) {
-    recommendations.push(...aiKnowledgeBase.clothingRecommendations.rainy);
-  } else if (condition.includes('snow')) {
-    recommendations.push(...aiKnowledgeBase.clothingRecommendations.snowy);
-  }
-  
-  if (weatherData.wind.speed > 5) {
-    recommendations.push(...aiKnowledgeBase.clothingRecommendations.windy);
-  }
-  
-  const uniqueRecommendations = [...new Set(recommendations)];
-  const randomSelection = uniqueRecommendations.slice(0, 3);
-  
-  return `For ${city}'s current weather (${Math.round(temp)}°C), I recommend: ${randomSelection.join(', ')}. Stay comfortable! 👕`;
-}
-
-function getActivityRecommendation(weatherData) {
-  const condition = weatherData.weather[0].main.toLowerCase();
-  const temp = weatherData.main.temp;
-  const city = weatherData.name;
-  
-  let activities = [];
-  
-  if (condition.includes('clear') || condition.includes('sun')) {
-    activities = aiKnowledgeBase.activities.sunny;
-  } else if (condition.includes('rain')) {
-    activities = aiKnowledgeBase.activities.rainy;
-  } else if (condition.includes('snow')) {
-    activities = aiKnowledgeBase.activities.snowy;
-  } else if (condition.includes('cloud')) {
-    activities = aiKnowledgeBase.activities.cloudy;
-  }
-  
-  const randomActivities = activities.sort(() => 0.5 - Math.random()).slice(0, 3);
-  
-  return `Perfect activities for ${city}'s weather: ${randomActivities.join(', ')}! The weather is great for ${temp > 20 ? 'outdoor' : 'cozy indoor'} experiences. 🎯`;
-}
-
-function getCityRecommendations(cityName) {
-  const attractions = aiKnowledgeBase.cityAttractions.default;
-  const randomAttractions = attractions.sort(() => 0.5 - Math.random()).slice(0, 3);
-  
-  return `Popular places to visit in ${cityName}: ${randomAttractions.join(', ')}. Each city has unique attractions - explore local guides for specific recommendations! 🏛️`;
-}
-
-function getHealthTips(weatherData) {
-  const condition = weatherData.weather[0].main.toLowerCase();
-  const temp = weatherData.main.temp;
-  
-  let tips = [];
-  
-  if (temp > 30) {
-    tips = aiKnowledgeBase.healthTips.hot;
-  } else if (temp < 5) {
-    tips = aiKnowledgeBase.healthTips.cold;
-  } else if (condition.includes('rain')) {
-    tips = aiKnowledgeBase.healthTips.rainy;
-  } else if (condition.includes('snow')) {
-    tips = aiKnowledgeBase.healthTips.snowy;
-  } else if (condition.includes('clear')) {
-    tips = aiKnowledgeBase.healthTips.sunny;
-  }
-  
-  const randomTips = tips.slice(0, 2);
-  return `Health tips for today's weather: ${randomTips.join(' and ')}. Stay safe and healthy! 🏥`;
-}
-
-// City Guide phrases (updated)
-const cityPhrases = {
-  greeting: [
-    "Ask me anything about weather and your city! 🌍",
-    "Ready to explore weather insights? 🔍",
-    "Your AI weather assistant is here! ⛅"
-  ],
-  loading: [
-    "Analyzing weather data with AI... ⏳",
-    "Generating intelligent insights... 🧠",
-    "Processing weather information... 📡"
-  ],
-  sunny: [
-    "Perfect day for outdoor activities! ☀️",
-    "Beautiful weather - ask me what to do! 🌞",
-    "Sunny and amazing - need activity ideas? 😎"
-  ],
-  cloudy: [
-    "Nice and comfortable! Want suggestions? ☁️",
-    "Great weather for exploring! 🌤️",
-    "Perfect day - ask me for recommendations! 🌥️"
-  ],
-  rainy: [
-    "Cozy weather ahead! Indoor activity ideas? ☔",
-    "Perfect for hot drinks! Need suggestions? ☕",
-    "Rainy day fun - ask me what to do! 🌧️"
-  ],
-  snowy: [
-    "Winter wonderland! Want winter activities? ❄️",
-    "Perfect for hot chocolate! Need tips? ☕",
-    "Snowy day ahead - ask for recommendations! ⛄"
-  ],
-  hot: [
-    "Stay cool! Need hydration tips? 💧",
-    "Hot weather - want cooling suggestions? 🏖️",
-    "Perfect beach weather! Activity ideas? 🏊‍♀️"
-  ],
-  cold: [
-    "Bundle up! Want warming tips? 🧥",
-    "Perfect for cozy activities! Suggestions? ☕",
-    "Cold day - need warming advice? 🧣"
-  ],
-  windy: [
-    "Breezy day! Kite flying weather? 💨",
-    "Windy conditions - need safe activity ideas? 🍃",
-    "Fresh air ahead! Want suggestions? 🌬️"
-  ],
-  error: [
-    "City not found - try another location! 🤔",
-    "Search help needed? Ask me! 🔍",
-    "Let's find your city together! 📍"
-  ]
-};
+// Initialize AI
+const nimbus = new NimbusAI();
 
 // Initialize with current date and show start screen
 window.addEventListener('load', () => {
@@ -337,130 +258,72 @@ window.addEventListener('load', () => {
     day: 'numeric'
   });
   document.getElementById('currentDate').textContent = currentDate;
+  // Show start screen initially
   document.getElementById('startScreen').style.display = 'flex';
-  updateGuideMessage('greeting');
-  
-  // Initialize chat
-  initializeChat();
 });
 
-// Chat initialization
-function initializeChat() {
-  // Hide notification after a while
-  setTimeout(() => {
-    const notification = document.getElementById('fabNotification');
-    if (notification) {
-      notification.style.display = 'none';
+const cityInput = document.getElementById('cityInput');
+
+cityInput.addEventListener('input', function(e) {
+  clearTimeout(suggestionTimeout);
+  const query = e.target.value.trim();
+  suggestionTimeout = setTimeout(() => {
+    showSuggestions(query);
+  }, 300);
+});
+
+cityInput.addEventListener('keydown', function(e) {
+  const dropdown = document.getElementById('suggestionsDropdown');
+  const items = dropdown.querySelectorAll('.suggestion-item');
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    navigateSuggestions('down');
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    navigateSuggestions('up');
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (currentSuggestionIndex >= 0 && items[currentSuggestionIndex]) {
+      const cityName = items[currentSuggestionIndex].textContent.trim();
+      handleSuggestionClick(cityName);
+    } else {
+      getWeather();
     }
-  }, 5000);
-  
-  // Add enter key listener for chat input
-  document.getElementById('chatInput').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-}
-
-// Chat functionality
-function toggleChat() {
-  const chatContainer = document.getElementById('chatContainer');
-  const chatFab = document.getElementById('chatFab');
-  
-  isChatOpen = !isChatOpen;
-  
-  if (isChatOpen) {
-    chatContainer.style.display = 'flex';
-    chatFab.style.display = 'none';
-    // Hide suggestions if weather is available
-    if (currentWeatherData) {
-      document.getElementById('chatSuggestions').style.display = 'none';
-    }
-  } else {
-    chatContainer.style.display = 'none';
-    chatFab.style.display = 'flex';
-  }
-}
-
-function sendMessage() {
-  const chatInput = document.getElementById('chatInput');
-  const message = chatInput.value.trim();
-  
-  if (!message) return;
-  
-  // Add user message
-  addMessage(message, 'user');
-  chatInput.value = '';
-  
-  // Generate AI response
-  setTimeout(() => {
-    const aiResponse = generateAIResponse(message);
-    addMessage(aiResponse, 'ai');
-  }, 500);
-}
-
-function sendSuggestion(suggestion) {
-  document.getElementById('chatInput').value = suggestion;
-  sendMessage();
-}
-
-function addMessage(text, sender) {
-  const chatMessages = document.getElementById('chatMessages');
-  const messageDiv = document.createElement('div');
-  messageDiv.className = `message ${sender}-message`;
-  
-  const currentTime = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-  
-  messageDiv.innerHTML = `
-    <div class="message-avatar">${sender === 'ai' ? '🤖' : '👤'}</div>
-    <div class="message-content">
-      <div class="message-text">${text}</div>
-      <div class="message-time">${currentTime}</div>
-    </div>
-  `;
-  
-  chatMessages.appendChild(messageDiv);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-  
-  // Store in chat history
-  chatHistory.push({text, sender, time: currentTime});
-}
-
-function generateAIResponse(userInput) {
-  // Context-aware response generation
-  const response = aiResponses.contextualResponses.getResponse(userInput, {
-    currentWeather: currentWeatherData,
-    currentForecast: currentForecastData,
-    chatHistory: chatHistory
-  });
-  
-  return response;
-}
-
-// Search functionality
-document.getElementById('cityInput').addEventListener('keypress', function(e) {
-  if (e.key === 'Enter') {
-    getWeather();
+  } else if (e.key === 'Escape') {
+    hideSuggestions();
   }
 });
 
-// Weather fetching function with AI insights
+cityInput.addEventListener('blur', function() {
+  setTimeout(() => {
+    hideSuggestions();
+  }, 200);
+});
+
+document.addEventListener('click', function(e) {
+  const searchContainer = document.querySelector('.search-container');
+  if (!searchContainer.contains(e.target)) {
+    hideSuggestions();
+  }
+});
+
+function hideSuggestions() {
+  const dropdown = document.getElementById('suggestionsDropdown');
+  dropdown.classList.remove('show');
+  dropdown.innerHTML = '';
+}
 async function getWeather() {
   const city = document.getElementById('cityInput').value.trim();
   if (!city) {
     showError('Please enter a city name');
-    updateGuideMessage('error');
     return;
   }
 
-  // Start fade out animation
-  fadeOutContent();
-  updateGuideMessage('loading');
-  
   showLoading();
   hideError();
   hideStartScreen();
+  hideSuggestions();
 
   try {
     const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}&units=metric`;
@@ -477,129 +340,31 @@ async function getWeather() {
 
     const currentData = await currentResponse.json();
     const forecastData = await forecastResponse.json();
-    
-    // Fetch UV data with coordinates
-    const uvResponse = await fetch(
-      `https://api.openweathermap.org/data/2.5/uvi?lat=${currentData.coord.lat}&lon=${currentData.coord.lon}&appid=${apiKey}`
-    );
-    const uvData = uvResponse.ok ? await uvResponse.json() : null;
-    
-    // Generate mock air quality data
-    const airQualityData = generateMockAirQuality();
 
-    // Store global data
-    currentWeatherData = currentData;
-    currentForecastData = forecastData;
-    currentAirQuality = airQualityData;
-    
-    // Add UV data to weather data
-    if (uvData) {
-      currentData.uvi = uvData.value;
-    }
+    displayWeather(currentData);
+    displayHourlyForecast(forecastData);
 
-    // Wait for fade out to complete then display new data
-    setTimeout(() => {
-      displayWeather(currentData, airQualityData);
-      displayHourlyForecast(forecastData);
-      generateAIInsights(currentData);
-      setBackgroundByWeather(currentData.weather[0].icon);
-      
-      hideLoading();
-      fadeInContent();
-      
-      // Update guide message based on weather
-      updateGuideMessageByWeather(currentData);
-      
-      // Add AI message about new location
-      if (isChatOpen) {
-        setTimeout(() => {
-          const aiMessage = `I've updated the weather for ${currentData.name}! Ask me about clothing, activities, or local recommendations. 🌍`;
-          addMessage(aiMessage, 'ai');
-        }, 1000);
-      }
-    }, 300);
+    // Notify AI about weather update
+    nimbus.onWeatherUpdate(currentData);
 
+    hideLoading();
+    document.getElementById('weatherContent').classList.add('show');
   } catch (error) {
     hideLoading();
     showError('City not found. Please try again.');
-    updateGuideMessage('error');
-    fadeInContent();
     console.error('Error fetching weather:', error);
   }
 }
 
-// Generate AI insights
-function generateAIInsights(weatherData) {
-  const aiInsightsGrid = document.getElementById('aiInsights');
-  aiInsightsGrid.innerHTML = '';
-  
-  const insights = aiResponses.weatherAnalysis.generateInsight(weatherData);
-  
-  insights.forEach((insight, index) => {
-    const insightCard = document.createElement('div');
-    insightCard.className = 'ai-insight-card';
-    insightCard.style.animationDelay = `${index * 0.2}s`;
-    
-    const icons = ['🧠', '💡', '⚡', '🎯', '🌟'];
-    const icon = icons[index % icons.length];
-    
-    insightCard.innerHTML = `
-      <div class="insight-icon">${icon}</div>
-      <div class="insight-title">AI Analysis</div>
-      <div class="insight-text">${insight}</div>
-    `;
-    
-    aiInsightsGrid.appendChild(insightCard);
-  });
-}
-
-// Fade transition functions
-function fadeOutContent() {
-  const weatherContent = document.getElementById('weatherContent');
-  const container = document.querySelector('.container');
-  
-  weatherContent.classList.remove('show');
-  container.classList.add('fade-out');
-}
-
-function fadeInContent() {
-  const weatherContent = document.getElementById('weatherContent');
-  const container = document.querySelector('.container');
-  
-  setTimeout(() => {
-    container.classList.remove('fade-out');
-    container.classList.add('fade-in');
-    weatherContent.classList.add('show');
-  }, 100);
-}
-
-function generateMockAirQuality() {
-  // Generate realistic mock air quality data
-  const aqi = Math.floor(Math.random() * 5) + 1;
-  const pm25 = Math.floor(Math.random() * 50) + 5;
-  const pm10 = Math.floor(Math.random() * 80) + 10;
-  const o3 = Math.floor(Math.random() * 100) + 30;
-  
-  const levels = ['Good', 'Fair', 'Moderate', 'Poor', 'Very Poor'];
-  
-  return {
-    main: { aqi },
-    components: { pm2_5: pm25, pm10, o3 },
-    level: levels[aqi - 1]
-  };
-}
-
-function displayWeather(data, airQuality) {
+function displayWeather(data) {
+  currentWeatherData = data; // save for toggle
   const cityName = `${data.name}, ${data.sys.country}`;
   const temperature = Math.round(data.main.temp);
-  const feelsLike = Math.round(data.main.feels_like);
   const description = data.weather[0].description;
   const iconCode = data.weather[0].icon;
   const humidity = data.main.humidity;
   const windSpeed = Math.round(data.wind.speed * 3.6);
   const visibility = Math.round(data.visibility / 1000);
-  const pressure = data.main.pressure;
-  const uvIndex = data.uvi || Math.floor(Math.random() * 11);
 
   document.getElementById('cityName').textContent = cityName;
   document.getElementById('temperature').textContent = `${isCelsius ? temperature : convertToF(temperature)}°`;
@@ -608,26 +373,12 @@ function displayWeather(data, airQuality) {
   document.getElementById('humidity').textContent = `${humidity}%`;
   document.getElementById('windSpeed').textContent = `${windSpeed} km/h`;
   document.getElementById('visibility').textContent = `${visibility} km`;
-  document.getElementById('feelsLike').textContent = `${isCelsius ? feelsLike : convertToF(feelsLike)}°`;
-  document.getElementById('uvIndex').textContent = uvIndex;
-  document.getElementById('pressure').textContent = `${pressure} hPa`;
 
-  // Display air quality
-  if (airQuality) {
-    document.getElementById('aqiValue').textContent = airQuality.main.aqi * 20;
-    document.getElementById('aqiLevel').textContent = airQuality.level;
-    document.getElementById('pm25').textContent = `${airQuality.components.pm2_5} μg/m³`;
-    document.getElementById('pm10').textContent = `${airQuality.components.pm10} μg/m³`;
-    document.getElementById('ozone').textContent = `${airQuality.components.o3} μg/m³`;
-    
-    // Color code AQI
-    const aqiCard = document.querySelector('.air-quality-card');
-    const colors = ['#00e400', '#ffff00', '#ff7e00', '#ff0000', '#8f3f97'];
-    aqiCard.style.borderLeft = `4px solid ${colors[airQuality.main.aqi - 1]}`;
-  }
+  setBackgroundByWeather(iconCode);
 }
 
 function displayHourlyForecast(forecastData) {
+  currentForecastData = forecastData; // save for toggle
   const forecastGrid = document.getElementById('forecastGrid');
   forecastGrid.innerHTML = '';
 
@@ -637,7 +388,7 @@ function displayHourlyForecast(forecastData) {
 
   const futureForecasts = forecastData.list.filter(item => item.dt >= nowInCityTime).slice(0, 8);
 
-  futureForecasts.forEach((item, index) => {
+  futureForecasts.forEach((item) => {
     const forecastTime = new Date((item.dt + timezoneOffset) * 1000);
     const hour = forecastTime.getUTCHours();
     const formattedHour = hour === 0 ? '12 AM' :
@@ -647,7 +398,6 @@ function displayHourlyForecast(forecastData) {
     const temperature = Math.round(item.main.temp);
     const iconCode = item.weather[0].icon;
     const emoji = weatherEmojis[iconCode] || '☀️';
-    const precipitation = item.pop ? Math.round(item.pop * 100) : 0;
 
     const card = document.createElement('div');
     card.className = 'forecast-card';
@@ -655,13 +405,11 @@ function displayHourlyForecast(forecastData) {
       <div class="time">${formattedHour}</div>
       <div class="weather-icon">${emoji}</div>
       <div class="temp">${isCelsius ? temperature : convertToF(temperature)}°</div>
-      <div class="precipitation">${precipitation}%</div>
     `;
     forecastGrid.appendChild(card);
   });
 }
 
-// Utility functions
 function showLoading() {
   document.getElementById('loading').style.display = 'flex';
   document.getElementById('weatherContent').classList.remove('show');
@@ -672,12 +420,7 @@ function hideLoading() {
 }
 
 function hideStartScreen() {
-  const startScreen = document.getElementById('startScreen');
-  startScreen.style.opacity = '0';
-  startScreen.style.transform = 'translateY(-20px)';
-  setTimeout(() => {
-    startScreen.style.display = 'none';
-  }, 500);
+  document.getElementById('startScreen').style.display = 'none';
 }
 
 function showError(message) {
@@ -711,6 +454,10 @@ function setBackgroundByWeather(iconCode) {
   }
 }
 
+let isCelsius = true;
+let currentWeatherData = null;
+let currentForecastData = null;
+
 function convertToF(celsius) {
   return Math.round((celsius * 9/5) + 32);
 }
@@ -723,68 +470,15 @@ function capitalize(text) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-function toggleTemperatureUnit() {
+document.getElementById('unitToggleBtn').addEventListener('click', () => {
   isCelsius = !isCelsius;
   document.getElementById('unitToggleBtn').textContent = isCelsius ? 'Show °F' : 'Show °C';
 
-  if (currentWeatherData) displayWeather(currentWeatherData, currentAirQuality);
+  if (currentWeatherData) displayWeather(currentWeatherData);
   if (currentForecastData) displayHourlyForecast(currentForecastData);
+});
+
+// AI Toggle Function
+function toggleAI() {
+  nimbus.handleUserInteraction();
 }
-
-document.getElementById('unitToggleBtn').addEventListener('click', toggleTemperatureUnit);
-
-// City Guide Functions
-function updateGuideMessage(type) {
-  const guideMessage = document.getElementById('guideMessage');
-  const phrases = cityPhrases[type];
-  
-  if (phrases && phrases.length > 0) {
-    const randomPhrase = phrases[Math.floor(Math.random() * phrases.length)];
-    
-    // Fade out current message
-    guideMessage.style.opacity = '0';
-    guideMessage.style.transform = 'translateY(10px)';
-    
-    setTimeout(() => {
-      guideMessage.textContent = randomPhrase;
-      guideMessage.style.opacity = '1';
-      guideMessage.style.transform = 'translateY(0)';
-    }, 200);
-  }
-}
-
-function updateGuideMessageByWeather(weatherData) {
-  const condition = weatherData.weather[0].main.toLowerCase();
-  const temp = weatherData.main.temp;
-  const windSpeed = weatherData.wind.speed * 3.6;
-  
-  let messageType = 'greeting';
-  
-  // Determine message type based on weather conditions
-  if (condition.includes('rain') || condition.includes('drizzle')) {
-    messageType = 'rainy';
-  } else if (condition.includes('snow')) {
-    messageType = 'snowy';
-  } else if (condition.includes('clear')) {
-    messageType = 'sunny';
-  } else if (condition.includes('cloud')) {
-    messageType = 'cloudy';
-  } else if (temp > 30) {
-    messageType = 'hot';
-  } else if (temp < 5) {
-    messageType = 'cold';
-  } else if (windSpeed > 20) {
-    messageType = 'windy';
-  } else {
-    messageType = 'sunny';
-  }
-  
-  updateGuideMessage(messageType);
-}
-
-// Add some dynamic behavior - update guide message periodically
-setInterval(() => {
-  if (currentWeatherData) {
-    updateGuideMessageByWeather(currentWeatherData);
-  }
-}, 15000); // Update every 15 seconds with weather-based messages
