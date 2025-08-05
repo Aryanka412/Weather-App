@@ -3,24 +3,22 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Weather Assistant</title>
+  <title>Weather App with Nimbus AI</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="search-container">
     <input type="text" id="cityInput" class="search-input" placeholder="Search for a city..." autocomplete="off" />
-    <div class="search-actions">
-      <div class="search-icon" onclick="getWeather()">🔍</div>
-    </div>
+    <div class="search-icon" onclick="getWeather()">🔍</div>
+    <div class="suggestions-dropdown" id="suggestionsDropdown"></div>
   </div>
 
   <div class="container">
     <!-- Start Screen -->
     <div id="startScreen" class="start-screen">
-      <div class="start-icon">🤖</div>
-      <div class="start-text">AI Weather Assistant</div>
-      <div class="start-subtext">Get intelligent weather insights and recommendations</div>
+      <div class="start-icon">🔍</div>
+      <div class="start-text">Start searching for weather</div>
     </div>
 
     <!-- Loading State -->
@@ -49,7 +47,6 @@
         </div>
       </div>
 
-      <!-- Weather Details -->
       <div class="weather-details">
         <div class="detail-item">
           <div class="detail-icon">💧</div>
@@ -66,46 +63,6 @@
           <div id="visibility" class="detail-value">10 km</div>
           <div class="detail-label">Visibility</div>
         </div>
-        <div class="detail-item">
-          <div class="detail-icon">🌡️</div>
-          <div id="feelsLike" class="detail-value">25°</div>
-          <div class="detail-label">Feels Like</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-icon">🌅</div>
-          <div id="uvIndex" class="detail-value">5</div>
-          <div class="detail-label">UV Index</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-icon">🌊</div>
-          <div id="pressure" class="detail-value">1013 hPa</div>
-          <div class="detail-label">Pressure</div>
-        </div>
-      </div>
-
-      <!-- Air Quality Section -->
-      <div class="air-quality-section">
-        <div class="section-title">Air Quality</div>
-        <div class="air-quality-card">
-          <div class="aqi-main">
-            <div id="aqiValue" class="aqi-value">42</div>
-            <div id="aqiLevel" class="aqi-level">Good</div>
-          </div>
-          <div class="aqi-details">
-            <div class="aqi-item">
-              <span>PM2.5:</span>
-              <span id="pm25">12 μg/m³</span>
-            </div>
-            <div class="aqi-item">
-              <span>PM10:</span>
-              <span id="pm10">18 μg/m³</span>
-            </div>
-            <div class="aqi-item">
-              <span>O3:</span>
-              <span id="ozone">65 μg/m³</span>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div class="forecast-section">
@@ -114,71 +71,23 @@
           <!-- Forecast cards will be populated here -->
         </div>
       </div>
-
-      <!-- AI Insights Section -->
-      <div class="ai-insights-section">
-        <div class="section-title">AI Insights</div>
-        <div class="ai-insights-grid" id="aiInsights">
-          <!-- AI insights will be populated here -->
-        </div>
-      </div>
     </div>
   </div>
 
-  <!-- AI Chatbot Interface -->
-  <div class="chat-container" id="chatContainer">
-    <div class="chat-header">
-      <div class="chat-header-info">
-        <div class="chat-avatar">🤖</div>
-        <div class="chat-title">
-          <div class="chat-name">Weather Assistant</div>
-          <div class="chat-status">Online • AI Powered</div>
-        </div>
-      </div>
-      <button class="chat-close" onclick="toggleChat()">×</button>
-    </div>
-    
-    <div class="chat-messages" id="chatMessages">
-      <div class="message ai-message">
-        <div class="message-avatar">🤖</div>
-        <div class="message-content">
-          <div class="message-text">Hi! I'm your AI Weather Assistant. Ask me anything about the weather, get personalized recommendations, or discover what to do in any city! 🌤️</div>
-          <div class="message-time">Now</div>
+  <!-- AI Companion -->
+  <div class="ai-companion">
+    <div class="ai-speech-bubble" id="aiSpeechBubble">
+      <div class="ai-message" id="aiMessage"></div>
+      <div class="ai-typing" id="aiTyping" style="display: none;">
+        <span>Nimbus is thinking</span>
+        <div class="typing-dots">
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
+          <div class="typing-dot"></div>
         </div>
       </div>
     </div>
-    
-    <div class="chat-input-container">
-      <div class="chat-suggestions" id="chatSuggestions">
-        <button class="suggestion-chip" onclick="sendSuggestion('What should I wear today?')">What should I wear today?</button>
-        <button class="suggestion-chip" onclick="sendSuggestion('Best outdoor activities?')">Best outdoor activities?</button>
-        <button class="suggestion-chip" onclick="sendSuggestion('7-day forecast')">7-day forecast</button>
-        <button class="suggestion-chip" onclick="sendSuggestion('Local attractions')">Local attractions</button>
-      </div>
-      <div class="chat-input-area">
-        <input type="text" id="chatInput" placeholder="Ask me about weather, activities, or your city..." />
-        <button id="sendBtn" onclick="sendMessage()">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Floating Chat Button -->
-  <div class="chat-fab" id="chatFab" onclick="toggleChat()">
-    <div class="fab-icon">💬</div>
-    <div class="fab-notification" id="fabNotification">1</div>
-  </div>
-
-  <!-- Bottom Chat Guide -->
-  <div class="bottom-guide" id="bottomGuide">
-    <div class="guide-content">
-      <div class="guide-avatar">🤖</div>
-      <div class="guide-message" id="guideMessage">Ask me anything about weather and your city! 🌍</div>
-      <button class="guide-chat-btn" onclick="toggleChat()">Chat Now</button>
-    </div>
+    <div class="ai-avatar" id="aiAvatar" onclick="toggleAI()">☁️</div>
   </div>
 
   <script src="script.js"></script>
