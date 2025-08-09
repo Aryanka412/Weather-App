@@ -3,70 +3,124 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Weather App with Nimbus AI</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <title>Weather Hub - Modern Weather App</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- Header Section -->
+  <div class="header">
+    <h1 class="app-title">Weather Hub</h1>
+    <p class="app-subtitle">Your intelligent weather companion with AI assistant</p>
+  </div>
+
+  <!-- Search Container -->
   <div class="search-container">
-    <input type="text" id="cityInput" class="search-input" placeholder="Search for a city..." autocomplete="off" />
+    <input type="text" id="cityInput" class="search-input" placeholder="Search for any city worldwide..." autocomplete="off" />
     <div class="search-icon" onclick="getWeather()">🔍</div>
     <div class="suggestions-dropdown" id="suggestionsDropdown"></div>
   </div>
 
-  <div class="container">
+  <!-- Main Container -->
+  <div class="main-container">
     <!-- Start Screen -->
     <div id="startScreen" class="start-screen">
-      <div class="start-icon">🔍</div>
-      <div class="start-text">Start searching for weather</div>
+      <div class="start-icon">🌍</div>
+      <div class="start-text">Discover Weather Anywhere</div>
+      <div class="start-subtext">Search for any city to get detailed weather information with AI-powered insights</div>
     </div>
 
     <!-- Loading State -->
-    <div id="loading" class="loading" style="display: none;">Loading weather data</div>
+    <div id="loading" class="loading" style="display: none;">
+      <span>Loading weather data</span>
+    </div>
     
     <!-- Error State -->
     <div id="error" class="error-message" style="display: none;"></div>
     
     <!-- Weather Content -->
     <div id="weatherContent" class="weather-content">
-      <div class="location-header">
-        <span class="location-icon">📍</span>
-        <span id="cityName">London</span>
-      </div>
-      <div class="date-display" id="currentDate">Monday, July 21, 2025</div>
+      <!-- Weather Grid -->
+      <div class="weather-grid">
+        <!-- Main Weather Card -->
+        <div class="main-weather-card">
+          <div class="location-header">
+            <div class="location-info">
+              <span class="location-icon">📍</span>
+              <span id="cityName" class="city-name">London</span>
+            </div>
+            <button id="unitToggleBtn" class="unit-toggle">°F</button>
+          </div>
+          <div id="currentDate" class="date-display">Monday, July 21, 2025</div>
 
-      <div class="unit-toggle">
-        <button id="unitToggleBtn">Show °F</button>
-      </div>
+          <div class="main-weather">
+            <div id="weatherIcon" class="weather-icon-main">☀️</div>
+            <div class="temp-info">
+              <div id="temperature" class="temperature">22°</div>
+              <div id="description" class="description">Sunny</div>
+              <div id="feelsLike" class="feels-like">Feels like 25°</div>
+            </div>
+          </div>
+        </div>
 
-      <div class="main-weather">
-        <div id="weatherIcon" class="weather-icon-main">☀️</div>
-        <div class="temp-main">
-          <div id="temperature" class="temperature">22°</div>
-          <div id="description" class="description">Sunny</div>
+        <!-- Weather Details Card -->
+        <div class="details-card">
+          <h3 class="details-title">Weather Details</h3>
+          <div class="weather-details">
+            <div class="detail-item">
+              <div class="detail-icon">💧</div>
+              <div id="humidity" class="detail-value">65%</div>
+              <div class="detail-label">Humidity</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-icon">💨</div>
+              <div id="windSpeed" class="detail-value">15 km/h</div>
+              <div class="detail-label">Wind Speed</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-icon">👁️</div>
+              <div id="visibility" class="detail-value">10 km</div>
+              <div class="detail-label">Visibility</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-icon">🌡️</div>
+              <div id="pressure" class="detail-value">1013 hPa</div>
+              <div class="detail-label">Pressure</div>
+            </div>
+            <div class="detail-item uv-item">
+              <div class="detail-icon">☀️</div>
+              <div id="uvIndex" class="detail-value">5</div>
+              <div class="detail-label">UV Index</div>
+              <div id="uvLevel" class="uv-level">Moderate</div>
+            </div>
+            <div class="detail-item sunrise-sunset">
+              <div class="sun-times">
+                <div class="sun-time">
+                  <div class="sun-icon sunrise">🌅</div>
+                  <div>
+                    <div class="sun-label">Sunrise</div>
+                    <div id="sunrise" class="sun-value">06:30</div>
+                  </div>
+                </div>
+                <div class="sun-time">
+                  <div class="sun-icon sunset">🌇</div>
+                  <div>
+                    <div class="sun-label">Sunset</div>
+                    <div id="sunset" class="sun-value">19:45</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="weather-details">
-        <div class="detail-item">
-          <div class="detail-icon">💧</div>
-          <div id="humidity" class="detail-value">65%</div>
-          <div class="detail-label">Humidity</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-icon">💨</div>
-          <div id="windSpeed" class="detail-value">15 km/h</div>
-          <div class="detail-label">Wind Speed</div>
-        </div>
-        <div class="detail-item">
-          <div class="detail-icon">👁️</div>
-          <div id="visibility" class="detail-value">10 km</div>
-          <div class="detail-label">Visibility</div>
-        </div>
-      </div>
-
+      <!-- Forecast Section -->
       <div class="forecast-section">
-        <div class="forecast-title">24-Hour Forecast</div>
+        <div class="forecast-header">
+          <div class="forecast-title" id="forecastTitle">24-Hour Forecast</div>
+          <button id="forecastToggle" class="forecast-toggle">5-Day</button>
+        </div>
         <div class="forecast-grid" id="forecastGrid">
           <!-- Forecast cards will be populated here -->
         </div>
@@ -74,20 +128,27 @@
     </div>
   </div>
 
-  <!-- AI Companion -->
-  <div class="ai-companion">
-    <div class="ai-speech-bubble" id="aiSpeechBubble">
-      <div class="ai-message" id="aiMessage"></div>
-      <div class="ai-typing" id="aiTyping" style="display: none;">
-        <span>Nimbus is thinking</span>
-        <div class="typing-dots">
-          <div class="typing-dot"></div>
-          <div class="typing-dot"></div>
-          <div class="typing-dot"></div>
-        </div>
+  <!-- Weather Info Bar for Chatbot Context -->
+  <div class="weather-info-bar" id="weatherInfoBar">
+    <div class="weather-quick-info">
+      <div class="weather-quick-item">
+        <span>📍</span>
+        <span id="infoCity">-</span>
+      </div>
+      <div class="weather-quick-item">
+        <span>🌡️</span>
+        <span id="infoTemp">-</span>
+      </div>
+      <div class="weather-quick-item">
+        <span>☁️</span>
+        <span id="infoCondition">-</span>
+      </div>
+      <div class="weather-quick-item">
+        <span>💧</span>
+        <span id="infoHumidity">-</span>
       </div>
     </div>
-    <div class="ai-avatar" id="aiAvatar" onclick="toggleAI()">☁️</div>
+    <button class="weather-info-close" onclick="hideWeatherInfo()">×</button>
   </div>
 
   <script src="script.js"></script>
