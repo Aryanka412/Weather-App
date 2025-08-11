@@ -11,7 +11,7 @@
   <!-- Header Section -->
   <div class="header">
     <h1 class="app-title">Weather Hub</h1>
-    <p class="app-subtitle">Your intelligent weather companion with AI assistant</p>
+    <p class="app-subtitle">Your modern weather companion</p>
   </div>
 
   <!-- Search Container -->
@@ -27,7 +27,7 @@
     <div id="startScreen" class="start-screen">
       <div class="start-icon">🌍</div>
       <div class="start-text">Discover Weather Anywhere</div>
-      <div class="start-subtext">Search for any city to get detailed weather information with AI-powered insights</div>
+      <div class="start-subtext">Search for any city to get detailed weather information</div>
     </div>
 
     <!-- Loading State -->
@@ -115,42 +115,48 @@
         </div>
       </div>
 
-      <!-- Forecast Section -->
-      <div class="forecast-section">
-        <div class="forecast-header">
-          <div class="forecast-title" id="forecastTitle">24-Hour Forecast</div>
-          <button id="forecastToggle" class="forecast-toggle">5-Day</button>
+        <!-- Forecast Section -->
+        <div class="forecast-section">
+          <div class="forecast-header">
+            <div class="forecast-title" id="forecastTitle">24-Hour Forecast</div>
+            <button id="forecastToggle" class="forecast-toggle">5-Day</button>
+          </div>
+          <div class="forecast-grid" id="forecastGrid">
+            <!-- Forecast cards will be populated here -->
+          </div>
         </div>
-        <div class="forecast-grid" id="forecastGrid">
-          <!-- Forecast cards will be populated here -->
+      </div>
+
+      <!-- AI Weather Assistant -->
+      <div class="ai-assistant-section">
+        <div class="ai-header">
+          <div class="ai-title">
+            <span class="ai-icon">🤖</span>
+            AI Weather Assistant
+          </div>
+          <button id="aiToggleBtn" class="ai-toggle">💬</button>
+        </div>
+        
+        <div id="aiChatContainer" class="ai-chat-container" style="display: none;">
+          <div id="aiChatMessages" class="ai-chat-messages">
+            <div class="ai-message ai-bot">
+              <div class="ai-avatar">🤖</div>
+              <div class="ai-text">
+                Hello! I'm your AI weather assistant. I can help you understand weather conditions, provide insights, and answer your weather-related questions. What would you like to know?
+              </div>
+            </div>
+          </div>
+          
+          <div class="ai-input-container">
+            <input type="text" id="aiInput" class="ai-input" placeholder="Ask me about the weather..." />
+            <button id="aiSendBtn" class="ai-send-btn">📤</button>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Weather Info Bar for Chatbot Context -->
-  <div class="weather-info-bar" id="weatherInfoBar">
-    <div class="weather-quick-info">
-      <div class="weather-quick-item">
-        <span>📍</span>
-        <span id="infoCity">-</span>
-      </div>
-      <div class="weather-quick-item">
-        <span>🌡️</span>
-        <span id="infoTemp">-</span>
-      </div>
-      <div class="weather-quick-item">
-        <span>☁️</span>
-        <span id="infoCondition">-</span>
-      </div>
-      <div class="weather-quick-item">
-        <span>💧</span>
-        <span id="infoHumidity">-</span>
-      </div>
-    </div>
-    <button class="weather-info-close" onclick="hideWeatherInfo()">×</button>
-  </div>
-
+  <script src="config.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
