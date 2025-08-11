@@ -1,7 +1,5 @@
-// Replace YOUR_CHATBOT_ID with your actual Chatbase chatbot ID
-const CHATBASE_CHATBOT_ID = 'YOUR_CHATBOT_ID'; // You need to replace this with your actual Chatbase chatbot ID
-
-const apiKey = '2aa939fed7a78e3a3239ec5a87e31a05';
+// Use config system for API keys
+const apiKey = window.config ? window.config.weather.apiKey : '2aa939fed7a78e3a3239ec5a87e31a05';
 
 const weatherEmojis = {
   '01d': '☀️', '01n': '🌙',
@@ -22,80 +20,6 @@ let currentWeatherData = null;
 let currentForecastData = null;
 let isWeeklyView = false;
 
-// Chatbase Integration
-function initializeChatbase() {
-  // Create and inject Chatbase script
-  const script = document.createElement('script');
-  script.src = 'https://www.chatbase.co/embed.min.js';
-  script.defer = true;
-  script.setAttribute('chatbotId', CHATBASE_CHATBOT_ID);
-  script.setAttribute('domain', window.location.hostname);
-  
-  // Add custom styling and configuration
-  script.onload = function() {
-    // Configure the chatbot after it loads
-    if (window.embeddedChatbotConfig) {
-      window.embeddedChatbotConfig.chatbotId = CHATBASE_CHATBOT_ID;
-      window.embeddedChatbotConfig.domain = window.location.hostname;
-    }
-    
-    // Send initial weather context if available
-    setTimeout(sendWeatherContextToChatbot, 2000);
-  };
-  
-  document.head.appendChild(script);
-  
-  // Add Chatbase configuration
-  window.embeddedChatbotConfig = {
-    chatbotId: CHATBASE_CHATBOT_ID,
-    domain: window.location.hostname,
-    // You can customize the appearance here
-    theme: {
-      primaryColor: '#667eea',
-      backgroundColor: '#ffffff',
-      borderRadius: '24px',
-    }
-  };
-}
-
-// Send weather context to Chatbase
-function sendWeatherContextToChatbot() {
-  if (currentWeatherData && window.ChatbaseWidget) {
-    const weatherContext = `Current weather data: ${currentWeatherData.name}, ${currentWeatherData.sys.country} - ${Math.round(currentWeatherData.main.temp)}°C, ${currentWeatherData.weather[0].description}, ${currentWeatherData.main.humidity}% humidity, ${Math.round(currentWeatherData.wind.speed * 3.6)} km/h wind`;
-    
-    // Send context message to chatbot (this depends on Chatbase's API)
-    try {
-      // Note: This is a placeholder - you'll need to check Chatbase's documentation for the exact method
-      if (window.ChatbaseWidget && window.ChatbaseWidget.sendSystemMessage) {
-        window.ChatbaseWidget.sendSystemMessage(weatherContext);
-      }
-    } catch (error) {
-      console.log('Could not send weather context to chatbot:', error);
-    }
-  }
-}
-
-// Show weather info bar when chatbot is opened
-function showWeatherInfo() {
-  if (currentWeatherData) {
-    const infoBar = document.getElementById('weatherInfoBar');
-    const cityName = `${currentWeatherData.name}, ${currentWeatherData.sys.country}`;
-    const temp = `${isCelsius ? Math.round(currentWeatherData.main.temp) : convertToF(currentWeatherData.main.temp)}°${isCelsius ? 'C' : 'F'}`;
-    const condition = currentWeatherData.weather[0].description;
-    const humidity = `${currentWeatherData.main.humidity}%`;
-    
-    document.getElementById('infoCity').textContent = cityName;
-    document.getElementById('infoTemp').textContent = temp;
-    document.getElementById('infoCondition').textContent = condition;
-    document.getElementById('infoHumidity').textContent = humidity;
-    
-    infoBar.classList.add('show');
-  }
-}
-
-function hideWeatherInfo() {
-  document.getElementById('weatherInfoBar').classList.remove('show');
-}
 
 // City suggestions functionality
 async function showSuggestions(query) {
@@ -175,6 +99,21 @@ function navigateSuggestions(direction) {
 
 // Initialize with current date and show start screen
 window.addEventListener('load', async () => {
+  // Wait for config to be loaded
+  if (!window.config) {
+    console.warn('Config not loaded, waiting...');
+    await new Promise(resolve => {
+      const checkConfig = () => {
+        if (window.config) {
+          resolve();
+        } else {
+          setTimeout(checkConfig, 100);
+        }
+      };
+      checkConfig();
+    });
+  }
+  
   const currentDate = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -185,16 +124,6 @@ window.addEventListener('load', async () => {
   
   // Show start screen initially
   document.getElementById('startScreen').style.display = 'flex';
-  
-  // Initialize Chatbase
-  initializeChatbase();
-  
-  // Show weather info bar when user opens chatbot
-  setTimeout(() => {
-    // Listen for chatbot open events (this might vary based on Chatbase implementation)
-    document.addEventListener('chatbot-opened', showWeatherInfo);
-    document.addEventListener('chatbot-closed', hideWeatherInfo);
-  }, 3000);
 });
 
 // Event listeners for search input
@@ -311,9 +240,6 @@ async function getWeather() {
 
     displayWeather(currentData, uvIndex);
     displayForecast(forecastData);
-
-    // Send weather context to Chatbase
-    sendWeatherContextToChatbot();
 
     hideLoading();
     document.getElementById('weatherContent').classList.add('show');
@@ -560,5 +486,396 @@ document.getElementById('forecastToggle').addEventListener('click', () => {
   
   if (currentForecastData) {
     displayForecast(currentForecastData);
+  }
+});
+
+// OpenAI API-powered AI Chatbot
+let isAIChatOpen = false;
+let chatHistory = [];
+let userPreferences = {
+  units: 'metric',
+  language: 'en'
+};
+
+// Check if OpenAI API is configured
+function isOpenAIConfigured() {
+  return window.config && window.config.openai && window.config.openai.apiKey && window.config.openai.apiKey.trim() !== '';
+}
+
+// Get OpenAI API response
+async function getOpenAIResponse(userMessage) {
+  if (!isOpenAIConfigured()) {
+    return "I'm sorry, but the OpenAI API is not configured. Please add your OpenAI API key to the config.js file to enable AI-powered responses.";
+  }
+
+  try {
+    // Prepare the conversation context
+    const messages = [
+      {
+        role: "system",
+        content: `You are a helpful AI weather assistant. You have access to current weather data and can provide intelligent insights about weather conditions, clothing recommendations, and weather-related advice. 
+
+Current weather context: ${getWeatherContext()}
+
+Be conversational, helpful, and provide practical advice. Keep responses concise but informative. Use emojis appropriately and format responses with markdown when helpful.`
+      },
+      ...chatHistory.slice(-10).map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.message
+      })),
+      {
+        role: "user",
+        content: userMessage
+      }
+    ];
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${window.config.openai.apiKey}`
+      },
+      body: JSON.stringify({
+        model: window.config.openai.model,
+        messages: messages,
+        max_tokens: window.config.openai.maxTokens,
+        temperature: window.config.openai.temperature
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content.trim();
+  } catch (error) {
+    console.error('OpenAI API error:', error);
+    return `I'm sorry, I encountered an error while processing your request: ${error.message}. Please try again later.`;
+  }
+}
+
+// Get current weather context for OpenAI
+function getWeatherContext() {
+  if (!currentWeatherData) {
+    return "No weather data available. User needs to search for a city first.";
+  }
+
+  const data = currentWeatherData;
+  const temp = Math.round(data.main.temp);
+  const tempF = Math.round(convertToF(temp));
+  const humidity = data.main.humidity;
+  const windSpeed = Math.round(data.wind.speed * 3.6);
+  const visibility = Math.round(data.visibility / 1000);
+  const pressure = data.main.pressure;
+  const description = data.weather[0].description;
+  const mainCondition = data.weather[0].main;
+  const city = data.name;
+  const country = data.sys.country;
+
+  return `Location: ${city}, ${country}
+Temperature: ${temp}°C (${tempF}°F)
+Weather: ${description} (${mainCondition})
+Humidity: ${humidity}%
+Wind Speed: ${windSpeed} km/h
+Visibility: ${visibility} km
+Pressure: ${pressure} hPa
+Current time: ${new Date().toLocaleTimeString()}`;
+}
+
+// Enhanced sendMessage function with OpenAI API
+async function sendMessage() {
+  const aiInput = document.getElementById('aiInput');
+  const userMessage = aiInput.value.trim();
+  
+  if (!userMessage) return;
+  
+  console.log('Sending message:', userMessage);
+  
+  // Add user message to chat
+  addMessageToChat('user', userMessage);
+  aiInput.value = '';
+  
+  // Show typing indicator
+  const typingIndicator = addTypingIndicator();
+  
+  try {
+    // Get OpenAI API response
+    const aiResponse = await getOpenAIResponse(userMessage);
+    addMessageToChat('bot', aiResponse);
+    
+    // Add quick action buttons for follow-up questions
+    addQuickActions();
+  } catch (error) {
+    console.error('Error getting AI response:', error);
+    addMessageToChat('bot', "I'm sorry, I encountered an error while processing your request. Please try again.");
+  } finally {
+    removeTypingIndicator(typingIndicator);
+  }
+}
+
+// Add quick action buttons for common follow-up questions
+function addQuickActions() {
+  const chatMessages = document.getElementById('aiChatMessages');
+  const lastBotMessage = chatMessages.querySelector('.ai-message.ai-bot:last-child');
+  
+  if (lastBotMessage && currentWeatherData) {
+    const quickActionsDiv = document.createElement('div');
+    quickActionsDiv.className = 'quick-actions';
+    
+    const actions = [
+      { text: '👕 What should I wear?', query: 'What should I wear today based on the current weather?' },
+      { text: '🌡️ Temperature analysis', query: 'Can you analyze the current temperature and what it means for me?' },
+      { text: '💨 Wind conditions', query: 'What should I know about the current wind conditions?' },
+      { text: '☔ Weather forecast', query: 'What does the weather forecast look like?' },
+      { text: '🌅 Sun times', query: 'When are sunrise and sunset today?' }
+    ];
+    
+    quickActionsDiv.innerHTML = actions.map(action => 
+      `<button class="quick-action-btn" onclick="sendQuickAction('${action.query}')">${action.text}</button>`
+    ).join('');
+    
+    lastBotMessage.appendChild(quickActionsDiv);
+  }
+}
+
+// Handle quick action button clicks
+function sendQuickAction(query) {
+  document.getElementById('aiInput').value = query;
+  sendMessage();
+}
+
+// Enhanced message display with better formatting
+function addMessageToChat(sender, message) {
+  const chatMessages = document.getElementById('aiChatMessages');
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `ai-message ai-${sender}`;
+  
+  const avatar = sender === 'user' ? '👤' : '🤖';
+  const avatarClass = sender === 'user' ? 'ai-user' : 'ai-bot';
+  
+  // Format message with line breaks and emojis
+  const formattedMessage = formatMessage(message);
+  
+  messageDiv.innerHTML = `
+    <div class="ai-avatar ${avatarClass}">${avatar}</div>
+    <div class="ai-text">${formattedMessage}</div>
+  `;
+  
+  chatMessages.appendChild(messageDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  
+  // Store in chat history
+  chatHistory.push({ sender, message, timestamp: new Date() });
+  
+  // Limit chat history to prevent memory issues
+  if (chatHistory.length > 50) {
+    chatHistory = chatHistory.slice(-25);
+  }
+}
+
+// Format message with better readability
+function formatMessage(message) {
+  // Convert markdown-style formatting
+  let formatted = message
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>');
+  
+  // Add weather emojis for common terms
+  const weatherEmojis = {
+    'temperature': '🌡️',
+    'humidity': '💧',
+    'wind': '💨',
+    'rain': '🌧️',
+    'snow': '❄️',
+    'sun': '☀️',
+    'cloud': '☁️',
+    'storm': '⛈️',
+    'uv': '☀️',
+    'pressure': '🌡️',
+    'visibility': '👁️'
+  };
+  
+  Object.entries(weatherEmojis).forEach(([term, emoji]) => {
+    const regex = new RegExp(`\\b${term}\\b`, 'gi');
+    formatted = formatted.replace(regex, `${emoji} ${term}`);
+  });
+  
+  return formatted;
+}
+
+// Add weather summary when chat is opened
+function addWeatherSummary() {
+  if (currentWeatherData && chatHistory.length === 1) {
+    const temp = Math.round(currentWeatherData.main.temp);
+    const tempF = Math.round(convertToF(temp));
+    const description = currentWeatherData.weather[0].description;
+    const city = currentWeatherData.name;
+    
+    const summary = `Here's a quick summary of the current weather in ${city}:\n\n🌡️ Temperature: ${temp}°C (${tempF}°F)\n🌤️ Conditions: ${description}\n💧 Humidity: ${currentWeatherData.main.humidity}%\n💨 Wind: ${Math.round(currentWeatherData.wind.speed * 3.6)} km/h\n\nWhat would you like to know more about?`;
+    
+    addMessageToChat('bot', summary);
+  }
+}
+
+// Add weather alerts if conditions are severe
+function addWeatherAlerts() {
+  if (currentWeatherData && chatHistory.length === 1) {
+    const alerts = [];
+    const temp = currentWeatherData.main.temp;
+    const windSpeed = currentWeatherData.wind.speed * 3.6; // km/h
+    const visibility = currentWeatherData.visibility / 1000; // km
+    const mainCondition = currentWeatherData.weather[0].main;
+    
+    if (temp < -10) {
+      alerts.push("❄️ **Extreme Cold Alert**: Temperatures are dangerously low. Avoid prolonged outdoor exposure.");
+    } else if (temp > 35) {
+      alerts.push("🔥 **Heat Alert**: High temperatures detected. Stay hydrated and avoid strenuous activities.");
+    }
+    
+    if (windSpeed > 50) {
+      alerts.push("💨 **High Wind Alert**: Strong winds detected. Secure loose objects and avoid outdoor activities.");
+    }
+    
+    if (visibility < 1) {
+      alerts.push("🌫️ **Low Visibility Alert**: Poor visibility conditions. Drive with extreme caution.");
+    }
+    
+    if (mainCondition === 'Thunderstorm') {
+      alerts.push("⛈️ **Storm Alert**: Thunderstorm conditions. Stay indoors and avoid open areas.");
+    }
+    
+    if (alerts.length > 0) {
+      setTimeout(() => {
+        const alertMessage = `⚠️ **Weather Alerts for ${currentWeatherData.name}**:\n\n${alerts.join('\n\n')}`;
+        addMessageToChat('bot', alertMessage);
+      }, 2000);
+    }
+  }
+}
+
+// Clear chat history
+function clearChat() {
+  const chatMessages = document.getElementById('aiChatMessages');
+  chatMessages.innerHTML = '';
+  chatHistory = [];
+  
+  // Add welcome message back
+  addMessageToChat('bot', "Hello! I'm your AI-powered weather assistant. I can help you understand weather conditions, provide detailed insights, clothing recommendations, and answer any weather-related questions. What would you like to know about today's weather?");
+  
+  // Add weather summary if available
+  if (currentWeatherData) {
+    setTimeout(() => {
+      addWeatherSummary();
+      addWeatherAlerts();
+    }, 500);
+  }
+}
+
+// Add clear chat button to the chat header
+function addClearChatButton() {
+  const aiHeader = document.querySelector('.ai-header');
+  if (aiHeader && !document.getElementById('clearChatBtn')) {
+    const clearBtn = document.createElement('button');
+    clearBtn.id = 'clearChatBtn';
+    clearBtn.className = 'clear-chat-btn';
+    clearBtn.innerHTML = '🗑️';
+    clearBtn.title = 'Clear Chat';
+    clearBtn.onclick = clearChat;
+    
+    aiHeader.appendChild(clearBtn);
+  }
+}
+
+// Typing indicator functions
+function addTypingIndicator() {
+  const chatMessages = document.getElementById('aiChatMessages');
+  const typingDiv = document.createElement('div');
+  typingDiv.className = 'ai-message ai-bot typing-indicator';
+  typingDiv.id = 'typing-indicator';
+  
+  typingDiv.innerHTML = `
+    <div class="ai-avatar ai-bot">🤖</div>
+    <div class="ai-text typing-text">
+      <span class="typing-dot">●</span>
+      <span class="typing-dot">●</span>
+      <span class="typing-dot">●</span>
+    </div>
+  `;
+  
+  chatMessages.appendChild(typingDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  
+  return typingDiv;
+}
+
+function removeTypingIndicator(typingIndicator) {
+  if (typingIndicator && typingIndicator.parentNode) {
+    typingIndicator.parentNode.removeChild(typingIndicator);
+  }
+}
+
+// Enhanced event listeners for the chatbot
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('Setting up OpenAI-powered AI chatbot...');
+  
+  const aiToggleBtn = document.getElementById('aiToggleBtn');
+  const aiSendBtn = document.getElementById('aiSendBtn');
+  const aiInput = document.getElementById('aiInput');
+  
+  // Check OpenAI configuration and update UI accordingly
+  if (!isOpenAIConfigured()) {
+    console.warn('OpenAI API not configured. Please add your API key to config.js');
+    const aiHeader = document.querySelector('.ai-header');
+    if (aiHeader) {
+      aiHeader.classList.add('no-api');
+      aiHeader.title = 'OpenAI API not configured - Add your API key to config.js';
+    }
+  }
+  
+  if (aiToggleBtn) {
+    aiToggleBtn.addEventListener('click', () => {
+      const chatContainer = document.getElementById('aiChatContainer');
+      if (isAIChatOpen) {
+        chatContainer.style.display = 'none';
+        aiToggleBtn.textContent = '💬';
+        isAIChatOpen = false;
+      } else {
+        chatContainer.style.display = 'block';
+        aiToggleBtn.textContent = '✕';
+        isAIChatOpen = true;
+        aiInput.focus();
+        
+        // Add clear chat button
+        addClearChatButton();
+        
+        // Add weather summary if this is the first time opening chat
+        if (chatHistory.length === 1 && currentWeatherData) {
+          setTimeout(() => {
+            addWeatherSummary();
+            addWeatherAlerts();
+          }, 500);
+        }
+      }
+    });
+  }
+  
+  if (aiSendBtn) {
+    aiSendBtn.addEventListener('click', sendMessage);
+  }
+  
+  if (aiInput) {
+    aiInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        sendMessage();
+      }
+    });
+    
+    // Auto-resize input based on content
+    aiInput.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
   }
 });
