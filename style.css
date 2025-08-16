@@ -1,4 +1,4 @@
-/* Global reset and typography */
+* Global reset and typography */
 * {
   margin: 0;
   padding: 0;
@@ -650,6 +650,25 @@ body.night {
   border-radius: 3px;
 }
 
+/* AI Chatbot Scrollbar styling */
+.ai-chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.ai-chat-messages::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.ai-chat-messages::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+}
+
+.ai-chat-messages::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
 /* AI Weather Assistant Styles */
 .ai-assistant-section {
   background: rgba(255, 255, 255, 0.1);
@@ -673,6 +692,50 @@ body.night {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  position: relative;
+}
+
+.rate-limit-indicator {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255, 193, 7, 0.9);
+  color: #000;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+  animation: pulse 2s infinite;
+}
+
+.ai-info {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 15px 20px;
+  margin-bottom: 20px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.ai-info p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.ai-info strong {
+  color: #FFFFFF;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
 }
 
 .ai-title {
@@ -787,6 +850,17 @@ body.night {
   outline: none;
   background: rgba(255, 255, 255, 0.25);
   border-color: rgba(255, 255, 255, 0.4);
+}
+
+.ai-input:disabled {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.ai-input:disabled::placeholder {
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .ai-send-btn {
