@@ -489,7 +489,7 @@ document.getElementById('forecastToggle').addEventListener('click', () => {
   }
 });
 
-// OpenAI API-powered AI Chatbot
+// Google Gemini API-powered AI Chatbot
 let isAIChatOpen = false;
 let chatHistory = [];
 let userPreferences = {
@@ -497,27 +497,149 @@ let userPreferences = {
   language: 'en'
 };
 
-// Check if OpenAI API is configured
-function isOpenAIConfigured() {
-  return window.config && window.config.openai && window.config.openai.apiKey && window.config.openai.apiKey.trim() !== '';
+// Rate limiting and retry logic
+let requestCount = 0;
+let lastRequestTime = 0;
+const RATE_LIMIT_WINDOW = 60000; // 1 minute window
+const MAX_REQUESTS_PER_WINDOW = 15; // Gemini allows more requests per minute
+let isRateLimited = false;
+let rateLimitResetTime = 0;
+
+// Check if Gemini API is configured
+function isGeminiConfigured() {
+  return window.config && window.config.gemini && window.config.gemini.apiKey && window.config.gemini.apiKey.trim() !== '';
 }
 
-// Get OpenAI API response
-async function getOpenAIResponse(userMessage) {
-  if (!isOpenAIConfigured()) {
-    return "I'm sorry, but the OpenAI API is not configured. Please add your OpenAI API key to the config.js file to enable AI-powered responses.";
+// Check rate limiting
+function checkRateLimit() {
+  const now = Date.now();
+  
+  // Reset counter if window has passed
+  if (now - lastRequestTime > RATE_LIMIT_WINDOW) {
+    requestCount = 0;
+    lastRequestTime = now;
+    isRateLimited = false;
+  }
+  
+  // Check if we're currently rate limited
+  if (isRateLimited) {
+    if (now < rateLimitResetTime) {
+      const remainingTime = Math.ceil((rateLimitResetTime - now) / 1000);
+      return {
+        limited: true,
+        message: `Rate limit active. Please wait ${remainingTime} seconds before trying again.`,
+        remainingTime: remainingTime
+      };
+    } else {
+      isRateLimited = false;
+      requestCount = 0;
+    }
+  }
+  
+  // Check if we're approaching the limit
+  if (requestCount >= MAX_REQUESTS_PER_WINDOW) {
+    isRateLimited = true;
+    rateLimitResetTime = now + RATE_LIMIT_WINDOW;
+    return {
+      limited: true,
+      message: `Rate limit reached. Please wait ${Math.ceil(RATE_LIMIT_WINDOW / 1000)} seconds before trying again.`,
+      remainingTime: Math.ceil(RATE_LIMIT_WINDOW / 1000)
+    };
+  }
+  
+  return { limited: false };
+}
+
+// Update UI to show rate limit status and city status
+function updateRateLimitUI() {
+  const aiHeader = document.querySelector('.ai-header');
+  const aiInput = document.getElementById('aiInput');
+  const aiSendBtn = document.getElementById('aiSendBtn');
+  
+  if (!aiHeader || !aiInput || !aiSendBtn) return;
+  
+  if (isRateLimited) {
+    const remainingTime = Math.ceil((rateLimitResetTime - Date.now()) / 1000);
+    if (remainingTime > 0) {
+      // Add rate limit indicator to header
+      let rateLimitIndicator = document.getElementById('rateLimitIndicator');
+      if (!rateLimitIndicator) {
+        rateLimitIndicator = document.createElement('div');
+        rateLimitIndicator.id = 'rateLimitIndicator';
+        rateLimitIndicator.className = 'rate-limit-indicator';
+        aiHeader.appendChild(rateLimitIndicator);
+      }
+      
+      rateLimitIndicator.innerHTML = `⏳ Rate limited: ${remainingTime}s`;
+      rateLimitIndicator.style.display = 'block';
+      
+      // Disable input and button
+      aiInput.disabled = true;
+      aiInput.placeholder = `Rate limited. Wait ${remainingTime}s...`;
+      aiSendBtn.disabled = true;
+      aiSendBtn.style.opacity = '0.5';
+    } else {
+      // Rate limit expired
+      isRateLimited = false;
+      requestCount = 0;
+      
+      // Remove rate limit indicator
+      const rateLimitIndicator = document.getElementById('rateLimitIndicator');
+      if (rateLimitIndicator) {
+        rateLimitIndicator.style.display = 'none';
+      }
+      
+      // Re-enable input and button
+      aiInput.disabled = false;
+      aiInput.placeholder = 'Ask me about the weather...';
+      aiSendBtn.disabled = false;
+      aiSendBtn.style.opacity = '1';
+    }
+  }
+  
+  // Show current request count and city status in the info section
+  const aiInfo = document.querySelector('.ai-info');
+  if (aiInfo) {
+    const remainingRequests = Math.max(0, MAX_REQUESTS_PER_WINDOW - requestCount);
+    const cityStatus = currentWeatherData ? `✅ City: ${currentWeatherData.name}` : '🌍 No city selected';
+    const infoText = aiInfo.querySelector('p');
+    if (infoText) {
+      infoText.innerHTML = `💡 <strong>Status:</strong> ${cityStatus} | ${remainingRequests} requests remaining this minute. ${isRateLimited ? `Rate limited for ${Math.ceil((rateLimitResetTime - Date.now()) / 1000)}s.` : 'All good!'}`;
+    }
+  }
+}
+
+// Get Gemini API response
+async function getGeminiResponse(userMessage) {
+  if (!isGeminiConfigured()) {
+    return "I'm sorry, but the Gemini API is not configured. Please add your Gemini API key to the config.js file to enable AI-powered responses.";
+  }
+
+  // Check rate limiting first
+  const rateLimitCheck = checkRateLimit();
+  if (rateLimitCheck.limited) {
+    // Use fallback response instead of just showing rate limit message
+    return `⏳ ${rateLimitCheck.message}\n\n💡 In the meantime, here's what I can tell you:\n\n${getFallbackResponse(userMessage)}`;
   }
 
   try {
+    // Increment request counter
+    requestCount++;
+    
     // Prepare the conversation context
     const messages = [
       {
         role: "system",
-        content: `You are a helpful AI weather assistant. You have access to current weather data and can provide intelligent insights about weather conditions, clothing recommendations, and weather-related advice. 
+        content: `You are a helpful AI weather assistant with access to REAL-TIME weather data from OpenWeatherMap API. You can provide intelligent insights about weather conditions, clothing recommendations, and weather-related advice.
 
 Current weather context: ${getWeatherContext()}
 
-Be conversational, helpful, and provide practical advice. Keep responses concise but informative. Use emojis appropriately and format responses with markdown when helpful.`
+IMPORTANT INSTRUCTIONS: 
+1. You have ACCESS TO REAL-TIME WEATHER DATA including sunrise/sunset times, temperature, humidity, wind, pressure, UV index, and more. Use this data to provide accurate, current information.
+2. If the user asks about a specific city or location and no weather data is available, guide them to search for that city first using the search bar above. Say something like: "I'd love to tell you about the weather in [city]! Please use the search bar above to search for that city first, then I can provide detailed insights."
+3. If weather data IS available, provide detailed, helpful responses using the REAL-TIME data you have access to. You can answer questions about sunrise/sunset times, current conditions, and provide analysis.
+4. NEVER say you don't have access to real-time information - you DO have access to current weather data through the OpenWeatherMap API.
+5. Be conversational, helpful, and provide practical advice. Keep responses concise but informative. Use emojis appropriately and format responses with markdown when helpful.`
       },
       ...chatHistory.slice(-10).map(msg => ({
         role: msg.sender === 'user' ? 'user' : 'assistant',
@@ -529,58 +651,189 @@ Be conversational, helpful, and provide practical advice. Keep responses concise
       }
     ];
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${window.config.gemini.model}:generateContent?key=${window.config.gemini.apiKey}`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${window.config.openai.apiKey}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: window.config.openai.model,
-        messages: messages,
-        max_tokens: window.config.openai.maxTokens,
-        temperature: window.config.openai.temperature
+        contents: [{
+          parts: [{
+            text: messages.map(msg => `${msg.role}: ${msg.content}`).join('\n\n')
+          }]
+        }],
+        generationConfig: {
+          maxOutputTokens: window.config.gemini.maxTokens,
+          temperature: window.config.gemini.temperature
+        }
       })
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
+      if (response.status === 429) {
+        // Rate limited by Gemini - set our local rate limit
+        isRateLimited = true;
+        rateLimitResetTime = Date.now() + 60000; // 1 minute
+        return "I'm experiencing high demand right now. Please wait a minute before asking another question. This helps ensure everyone gets a fair chance to use the service.";
+      } else if (response.status === 400) {
+        return "Bad request: Please check your message format or try rephrasing your question.";
+      } else if (response.status === 403) {
+        return "Access denied: Please check your Gemini API key in the config.js file.";
+      } else if (response.status >= 500) {
+        return "Gemini servers are experiencing issues. Please try again in a few minutes.";
+      } else {
+        throw new Error(`Gemini API error: ${response.status}`);
+      }
     }
 
     const data = await response.json();
-    return data.choices[0].message.content.trim();
+    if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+      return data.candidates[0].content.parts[0].text.trim();
+    } else {
+      throw new Error('Unexpected response format from Gemini API');
+    }
   } catch (error) {
-    console.error('OpenAI API error:', error);
-    return `I'm sorry, I encountered an error while processing your request: ${error.message}. Please try again later.`;
+    console.error('Gemini API error:', error);
+    
+    // Provide fallback responses for common errors
+    if (error.message.includes('429')) {
+      return "I'm experiencing high demand right now. Please wait a minute before asking another question.";
+    } else if (error.message.includes('network') || error.message.includes('fetch')) {
+      return "I'm having trouble connecting to the AI service. Please check your internet connection and try again.";
+    } else {
+      return `I'm sorry, I encountered an error while processing your request: ${error.message}. Please try again later.`;
+    }
   }
 }
 
-// Get current weather context for OpenAI
+// Get current weather context for Gemini API
 function getWeatherContext() {
   if (!currentWeatherData) {
     return "No weather data available. User needs to search for a city first.";
   }
+  
+  // Check if weather data is fresh (less than 10 minutes old)
+  const dataAge = Date.now() - (currentWeatherData.dt * 1000);
+  const isFresh = dataAge < 600000; // 10 minutes in milliseconds
+  const dataFreshness = isFresh ? "FRESH" : "RECENT";
 
   const data = currentWeatherData;
   const temp = Math.round(data.main.temp);
   const tempF = Math.round(convertToF(temp));
+  const feelsLike = Math.round(data.main.feels_like);
+  const feelsLikeF = Math.round(convertToF(feelsLike));
+  const tempMin = Math.round(data.main.temp_min);
+  const tempMax = Math.round(data.main.temp_max);
   const humidity = data.main.humidity;
   const windSpeed = Math.round(data.wind.speed * 3.6);
+  const windSpeedMph = Math.round(data.wind.speed * 2.237);
   const visibility = Math.round(data.visibility / 1000);
   const pressure = data.main.pressure;
   const description = data.weather[0].description;
   const mainCondition = data.weather[0].main;
   const city = data.name;
   const country = data.sys.country;
+  
+  // Get sunrise and sunset times
+  const sunrise = formatTime(data.sys.sunrise, data.timezone);
+  const sunset = formatTime(data.sys.sunset, data.timezone);
+  
+  // Get UV index if available
+  let uvInfo = '';
+  const uvElement = document.getElementById('uvIndex');
+  if (uvElement && uvElement.textContent !== '--') {
+    const uvIndex = uvElement.textContent;
+    const uvLevel = document.getElementById('uvLevel').textContent;
+    uvInfo = `\nUV Index: ${uvIndex} (${uvLevel})`;
+  }
 
-  return `Location: ${city}, ${country}
-Temperature: ${temp}°C (${tempF}°F)
-Weather: ${description} (${mainCondition})
-Humidity: ${humidity}%
-Wind Speed: ${windSpeed} km/h
-Visibility: ${visibility} km
-Pressure: ${pressure} hPa
-Current time: ${new Date().toLocaleTimeString()}`;
+  return `**${dataFreshness} WEATHER DATA FOR ${city.toUpperCase()}, ${country.toUpperCase()}**
+
+📍 **Location**: ${city}, ${country}
+🌡️ **Temperature**: ${temp}°C (${tempF}°F)
+🌡️ **Feels Like**: ${feelsLike}°C (${feelsLikeF}°F)
+🌡️ **Range**: ${tempMin}°C to ${tempMax}°C
+🌤️ **Weather**: ${description} (${mainCondition})
+💧 **Humidity**: ${humidity}%
+💨 **Wind Speed**: ${windSpeed} km/h (${windSpeedMph} mph)
+👁️ **Visibility**: ${visibility} km
+🌪️ **Pressure**: ${pressure} hPa
+🌅 **Sunrise**: ${sunrise}
+🌇 **Sunset**: ${sunset}${uvInfo}
+⏰ **Current Time**: ${new Date().toLocaleTimeString()}
+⏱️ **Data Age**: ${Math.round(dataAge / 60000)} minutes ago
+
+**IMPORTANT**: This is REAL-TIME weather data from OpenWeatherMap API. You have access to all this information and can provide detailed insights, recommendations, and analysis based on this current data. The data is ${isFresh ? 'fresh and current' : 'recent and reliable'}.`;
+}
+
+// Fallback responses when API is rate limited
+function getFallbackResponse(userMessage) {
+  const message = userMessage.toLowerCase();
+  
+  if (!currentWeatherData) {
+    // Check if the user is asking about a specific city
+    const cityKeywords = ['weather in', 'temperature in', 'how is', 'what is', 'tell me about', 'forecast for', 'conditions in'];
+    const isAskingAboutCity = cityKeywords.some(keyword => message.includes(keyword));
+    
+    if (isAskingAboutCity) {
+      return "🌍 I'd love to tell you about the weather in that city! Please use the search bar above to search for the city first. Once you do that, I can provide detailed insights about the current conditions, temperature, humidity, wind, and more!";
+    }
+    
+    return "I'd be happy to help with weather questions! 🌍 First, please search for a city using the search bar above to get current weather data. Once you do that, I can provide personalized insights about that location's weather conditions, clothing recommendations, and more!";
+  }
+  
+  const data = currentWeatherData;
+  const temp = Math.round(data.main.temp);
+  const tempF = Math.round(convertToF(temp));
+  const description = data.weather[0].description;
+  
+  if (message.includes('wear') || message.includes('clothing') || message.includes('dress')) {
+    if (temp < 10) return "🥶 It's quite cold at ${temp}°C (${tempF}°F). I recommend wearing a warm coat, gloves, and a hat.";
+    else if (temp < 20) return "🧥 It's cool at ${temp}°C (${tempF}°F). A light jacket or sweater would be comfortable.";
+    else if (temp < 25) return "👕 It's pleasant at ${temp}°C (${tempF}°F). Light clothing should be fine.";
+    else return "☀️ It's warm at ${temp}°C (${tempF}°F). Shorts and t-shirts would be comfortable.";
+  }
+  
+  if (message.includes('temperature') || message.includes('hot') || message.includes('cold')) {
+    return `🌡️ Current temperature is ${temp}°C (${tempF}°F). ${temp < 15 ? 'It\'s on the cooler side.' : temp > 25 ? 'It\'s quite warm!' : 'It\'s a comfortable temperature.'}`;
+  }
+  
+  if (message.includes('wind') || message.includes('breezy')) {
+    const windSpeed = Math.round(data.wind.speed * 3.6);
+    return `💨 Wind speed is ${windSpeed} km/h. ${windSpeed < 10 ? 'It\'s calm.' : windSpeed < 20 ? 'There\'s a light breeze.' : 'It\'s quite windy!'}`;
+  }
+  
+  if (message.includes('rain') || message.includes('precipitation')) {
+    if (description.includes('rain')) return "☔ Yes, there's rain in the forecast. Don't forget your umbrella!";
+    else return "🌤️ No rain expected right now. The weather looks clear!";
+  }
+  
+  if (message.includes('sun') || message.includes('uv')) {
+    const uvElement = document.getElementById('uvIndex');
+    if (uvElement && uvElement.textContent !== '--') {
+      const uvIndex = uvElement.textContent;
+      const uvLevel = document.getElementById('uvLevel').textContent;
+      return `☀️ UV Index is ${uvIndex} (${uvLevel}). ${uvIndex > 5 ? 'High UV - wear sunscreen and protective clothing!' : 'Moderate UV - sunscreen recommended.'}`;
+    }
+    return "☀️ Check the UV index above for sun protection advice. Remember to wear sunscreen when spending time outdoors!";
+  }
+  
+  if (message.includes('sunrise') || message.includes('sunset') || message.includes('sun times')) {
+    const sunrise = formatTime(data.sys.sunrise, data.timezone);
+    const sunset = formatTime(data.sys.sunset, data.timezone);
+    return `🌅 **Sun Times for ${data.name}**:\n🌅 Sunrise: ${sunrise}\n🌇 Sunset: ${sunset}`;
+  }
+  
+  if (message.includes('pressure') || message.includes('atmospheric')) {
+    return `🌪️ Current atmospheric pressure is ${data.main.pressure} hPa. ${data.main.pressure < 1000 ? 'Low pressure - might indicate unsettled weather.' : data.main.pressure > 1020 ? 'High pressure - usually means stable, clear weather.' : 'Normal pressure range.'}`;
+  }
+  
+  if (message.includes('visibility') || message.includes('how far')) {
+    const visibility = Math.round(data.visibility / 1000);
+    return `👁️ Visibility is ${visibility} km. ${visibility < 5 ? 'Reduced visibility - drive carefully!' : visibility < 10 ? 'Moderate visibility.' : 'Good visibility conditions.'}`;
+  }
+  
+  return `I can see it's currently ${description} with a temperature of ${temp}°C (${tempF}°F). What specific weather information would you like to know?`;
 }
 
 // Enhanced sendMessage function with OpenAI API
@@ -600,8 +853,8 @@ async function sendMessage() {
   const typingIndicator = addTypingIndicator();
   
   try {
-    // Get OpenAI API response
-    const aiResponse = await getOpenAIResponse(userMessage);
+    // Get Gemini API response
+    const aiResponse = await getGeminiResponse(userMessage);
     addMessageToChat('bot', aiResponse);
     
     // Add quick action buttons for follow-up questions
@@ -761,8 +1014,22 @@ function clearChat() {
   chatMessages.innerHTML = '';
   chatHistory = [];
   
+  // Reset rate limiting when clearing chat
+  requestCount = 0;
+  isRateLimited = false;
+  rateLimitResetTime = 0;
+  
   // Add welcome message back
   addMessageToChat('bot', "Hello! I'm your AI-powered weather assistant. I can help you understand weather conditions, provide detailed insights, clothing recommendations, and answer any weather-related questions. What would you like to know about today's weather?");
+  
+  // Add rate limit info message
+  addMessageToChat('bot', "💡 <strong>Note:</strong> I'm limited to 15 requests per minute to ensure fair usage. If you hit the limit, I'll provide helpful fallback responses while you wait!");
+  
+  // Add getting started message
+  addMessageToChat('bot', "🌍 <strong>Getting Started:</strong> To get personalized weather insights, first search for a city using the search bar above. Once you do that, I can answer questions about that location's weather!");
+  
+  // Add data availability message
+  addMessageToChat('bot', "📊 <strong>Available Data:</strong> I have access to real-time weather data including temperature, humidity, wind, pressure, visibility, UV index, sunrise/sunset times, and more from OpenWeatherMap API!");
   
   // Add weather summary if available
   if (currentWeatherData) {
@@ -818,19 +1085,22 @@ function removeTypingIndicator(typingIndicator) {
 
 // Enhanced event listeners for the chatbot
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('Setting up OpenAI-powered AI chatbot...');
+  console.log('Setting up Gemini-powered AI chatbot...');
+  
+  // Start rate limit UI update timer
+  setInterval(updateRateLimitUI, 1000);
   
   const aiToggleBtn = document.getElementById('aiToggleBtn');
   const aiSendBtn = document.getElementById('aiSendBtn');
   const aiInput = document.getElementById('aiInput');
   
-  // Check OpenAI configuration and update UI accordingly
-  if (!isOpenAIConfigured()) {
-    console.warn('OpenAI API not configured. Please add your API key to config.js');
+  // Check Gemini configuration and update UI accordingly
+  if (!isGeminiConfigured()) {
+    console.warn('Gemini API not configured. Please add your API key to config.js');
     const aiHeader = document.querySelector('.ai-header');
     if (aiHeader) {
       aiHeader.classList.add('no-api');
-      aiHeader.title = 'OpenAI API not configured - Add your API key to config.js';
+      aiHeader.title = 'Gemini API not configured - Add your API key to config.js';
     }
   }
   
@@ -879,3 +1149,112 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+// --- LEAFLET WEATHER MAP ---
+// Ensure DOM is loaded
+window.addEventListener('DOMContentLoaded', function() {
+  // Map container
+  const mapDiv = document.getElementById('map');
+  if (!mapDiv) return;
+
+  // Set map height for mobile
+  mapDiv.style.height = window.innerWidth < 600 ? '300px' : '400px';
+
+  // Default map center (London)
+  const defaultLatLng = [51.505, -0.09];
+  const map = L.map('map').setView(defaultLatLng, 4);
+
+  // Base map layer
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+
+  // --- Weather Overlay Layers ---
+  const owmApiKey = apiKey;
+  // OpenWeatherMap tile layers
+  const tempLayer = L.tileLayer(`https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid=${owmApiKey}`, {opacity: 0.6, attribution: 'Temp © OWM'});
+  const cloudsLayer = L.tileLayer(`https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid=${owmApiKey}`, {opacity: 0.5, attribution: 'Clouds © OWM'});
+  const precipLayer = L.tileLayer(`https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid=${owmApiKey}`, {opacity: 0.5, attribution: 'Precip © OWM'});
+  const windLayer = L.tileLayer(`https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid=${owmApiKey}`, {opacity: 0.5, attribution: 'Wind © OWM'});
+  const aqiLayer = L.tileLayer(`https://tile.openweathermap.org/map/air_pollution/{z}/{x}/{y}.png?appid=${owmApiKey}`, {opacity: 0.5, attribution: 'AQI © OWM'});
+
+  // Layer control
+  const baseLayers = { 'OpenStreetMap': map._layers[Object.keys(map._layers)[0]] };
+  const overlays = {
+    'Temperature': tempLayer,
+    'Clouds': cloudsLayer,
+    'Precipitation': precipLayer,
+    'Wind': windLayer,
+    'Air Quality (AQI)': aqiLayer
+  };
+  L.control.layers(baseLayers, overlays, {collapsed: false, position: 'topright'}).addTo(map);
+
+  // Add default overlay
+  tempLayer.addTo(map);
+
+  // --- Timeline Slider (Forecast Animation) ---
+  // OWM tiles support time steps via {time} param, but public API is limited. For demo, we can animate overlays by toggling layers.
+  // For a real timeline, use a paid OWM plan or Windy API.
+  // Here, we add a simple slider to fade between overlays.
+  const timelineDiv = L.control({position: 'bottomleft'});
+  timelineDiv.onAdd = function() {
+    const div = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+    div.style.background = 'rgba(255,255,255,0.8)';
+    div.style.padding = '8px 12px';
+    div.innerHTML = '<label style="font-size:0.95em;">Overlay:</label> <select id="layerSelect"><option value="Temperature">Temperature</option><option value="Clouds">Clouds</option><option value="Precipitation">Precipitation</option><option value="Wind">Wind</option><option value="Air Quality (AQI)">Air Quality (AQI)</option></select>';
+    return div;
+  };
+  timelineDiv.addTo(map);
+  document.getElementById('layerSelect').addEventListener('change', function(e) {
+    // Remove all overlays
+    Object.values(overlays).forEach(layer => map.removeLayer(layer));
+    // Add selected
+    overlays[e.target.value].addTo(map);
+  });
+
+  // --- Search Bar Integration (Leaflet Control Geocoder) ---
+  if (typeof L.Control.Geocoder !== 'undefined') {
+    const geocoder = L.Control.geocoder({
+      defaultMarkGeocode: false,
+      placeholder: 'Search city or place...'
+    })
+    .on('markgeocode', function(e) {
+      const bbox = e.geocode.bbox;
+      const center = e.geocode.center;
+      map.fitBounds(bbox);
+      map.setView(center, 10);
+      // Optionally trigger weather fetch for this location
+      showForecastPopup(center.lat, center.lng);
+    })
+    .addTo(map);
+  }
+
+  // --- Click-to-Forecast Popup ---
+  function showForecastPopup(lat, lon) {
+    // Fetch weather for clicked point
+    fetch(`https://api.openweathermap.org/data/2.5/onecall?lat=${lat}&lon=${lon}&appid=${owmApiKey}&units=metric`)
+      .then(res => res.json())
+      .then(data => {
+        const temp = Math.round(data.current.temp);
+        const desc = data.current.weather[0].description;
+        const icon = data.current.weather[0].icon;
+        const emoji = weatherEmojis[icon] || '☀️';
+        const aqi = data.current.aqi ? `<br>AQI: ${data.current.aqi}` : '';
+        L.popup()
+          .setLatLng([lat, lon])
+          .setContent(`<b>${emoji} ${temp}°C</b><br>${desc}${aqi}`)
+          .openOn(map);
+      });
+  }
+  map.on('click', function(e) {
+    showForecastPopup(e.latlng.lat, e.latlng.lng);
+  });
+
+  // --- Responsive map resize ---
+  window.addEventListener('resize', function() {
+    mapDiv.style.height = window.innerWidth < 600 ? '300px' : '400px';
+    map.invalidateSize();
+  });
+});
+// --- END LEAFLET WEATHER MAP ---
