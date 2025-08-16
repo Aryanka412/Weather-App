@@ -132,9 +132,13 @@
         <div class="ai-header">
           <div class="ai-title">
             <span class="ai-icon">🤖</span>
-            AI Weather Assistant
+            AI Weather Assistant (Powered by Gemini)
           </div>
           <button id="aiToggleBtn" class="ai-toggle">💬</button>
+        </div>
+        
+        <div class="ai-info">
+          <p>💡 <strong>Rate Limit Info:</strong> To ensure fair usage, you can make up to 15 requests per minute. If you hit the limit, wait 60 seconds and try again.</p>
         </div>
         
         <div id="aiChatContainer" class="ai-chat-container" style="display: none;">
@@ -142,7 +146,25 @@
             <div class="ai-message ai-bot">
               <div class="ai-avatar">🤖</div>
               <div class="ai-text">
-                Hello! I'm your AI weather assistant. I can help you understand weather conditions, provide insights, and answer your weather-related questions. What would you like to know?
+                Hello! I'm your AI weather assistant powered by Google Gemini. I can help you understand weather conditions, provide insights, and answer your weather-related questions. What would you like to know?
+              </div>
+            </div>
+            <div class="ai-message ai-bot">
+              <div class="ai-avatar">💡</div>
+              <div class="ai-text">
+                <strong>Note:</strong> I'm limited to 15 requests per minute to ensure fair usage. If you hit the limit, I'll provide helpful fallback responses while you wait!
+              </div>
+            </div>
+            <div class="ai-message ai-bot">
+              <div class="ai-avatar">🌍</div>
+              <div class="ai-text">
+                <strong>Getting Started:</strong> To get personalized weather insights, first search for a city using the search bar above. Once you do that, I can answer questions about that location's weather!
+              </div>
+            </div>
+            <div class="ai-message ai-bot">
+              <div class="ai-avatar">📊</div>
+              <div class="ai-text">
+                <strong>Available Data:</strong> I have access to real-time weather data including temperature, humidity, wind, pressure, visibility, UV index, sunrise/sunset times, and more from OpenWeatherMap API!
               </div>
             </div>
           </div>
