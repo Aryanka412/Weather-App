@@ -114,12 +114,6 @@ The AI Weather Assistant works with cities worldwide! Simply search for:
 - Cities with country: "Paris, France"
 - Cities with state: "Austin, Texas"
 
-## 📱 Mobile Experience
-- **Responsive Design**: Optimized for mobile devices
-- **Touch-Friendly**: Easy tap interactions
-- **Full-Screen Chat**: Immersive mobile chat experience
-- **Gesture Support**: Smooth scrolling and navigation
-
 ## 🔧 Technical Details
 
 ### Technologies Used
